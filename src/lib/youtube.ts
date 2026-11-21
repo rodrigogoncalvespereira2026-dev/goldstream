@@ -1,46 +1,11 @@
-import { useEffect, useState } from 'react'
 import { registerTracks, type Track } from './catalog'
 
-const KEY_STORAGE = 'sonora:youtube-key'
-const KEY_EVENT = 'sonora:youtube-key-change'
 const API = 'https://www.googleapis.com/youtube/v3'
 
 /* ---------------- chave de API ---------------- */
 
-export const readYouTubeKey = (): string => {
-  try {
-    return localStorage.getItem(KEY_STORAGE)?.trim() ?? ''
-  } catch {
-    return ''
-  }
-}
-
-export const writeYouTubeKey = (value: string): void => {
-  try {
-    const trimmed = value.trim()
-    if (trimmed) localStorage.setItem(KEY_STORAGE, trimmed)
-    else localStorage.removeItem(KEY_STORAGE)
-    window.dispatchEvent(new Event(KEY_EVENT))
-  } catch {
-    /* sem storage: a busca do YouTube fica indisponível */
-  }
-}
-
-export function useYouTubeKey(): [string, (value: string) => void] {
-  const [key, setKey] = useState(readYouTubeKey)
-
-  useEffect(() => {
-    const sync = () => setKey(readYouTubeKey())
-    window.addEventListener(KEY_EVENT, sync)
-    window.addEventListener('storage', sync)
-    return () => {
-      window.removeEventListener(KEY_EVENT, sync)
-      window.removeEventListener('storage', sync)
-    }
-  }, [])
-
-  return [key, writeYouTubeKey]
-}
+/** Chave da API do YouTube (YouTube Data API v3) usada pela busca do app. */
+export const YOUTUBE_API_KEY = 'AIzaSyDxHoaiSi6nTYeMKBgdt9Bj1IWto7KZOnA'
 
 /* ---------------- player embutido ---------------- */
 

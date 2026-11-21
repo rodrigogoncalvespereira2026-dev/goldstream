@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ALBUMS, GENRES, searchCatalog, type Track } from '../lib/catalog'
 import { searchFullSongs } from '../lib/audius'
-import { searchYouTube, useYouTubeKey } from '../lib/youtube'
+import { searchYouTube, YOUTUBE_API_KEY } from '../lib/youtube'
 import { AlbumCard, MediaCard, Section, TrackRow } from '../components/Cards'
-import { YouTubeConnect } from '../components/YouTubeConnect'
 import { YouTubeLink } from '../components/YouTubeLink'
 import { usePlayer } from '../lib/player'
 import type { Navigate } from '../lib/nav'
@@ -59,7 +58,7 @@ function TrackResults({
 
 export function Search({ query, navigate }: { query: string; navigate: Navigate }) {
   const { current, isPlaying, playQueue } = usePlayer()
-  const [youTubeKey] = useYouTubeKey()
+  const youTubeKey = YOUTUBE_API_KEY
   const trimmed = query.trim()
   const local = useMemo(() => searchCatalog(query), [query])
   const [full, setFull] = useState<SearchState>(idle)
@@ -75,7 +74,7 @@ export function Search({ query, navigate }: { query: string; navigate: Navigate 
 
     const controller = new AbortController()
     setFull({ status: 'loading', tracks: [] })
-    setYouTube(youTubeKey ? { status: 'loading', tracks: [] } : idle)
+    setYouTube({ status: 'loading', tracks: [] })
 
     const settle = (promise: Promise<Track[]>, set: (state: SearchState) => void) => {
       promise
@@ -90,21 +89,20 @@ export function Search({ query, navigate }: { query: string; navigate: Navigate 
 
     const timer = window.setTimeout(() => {
       settle(searchFullSongs(trimmed, controller.signal), setFull)
-      if (youTubeKey) settle(searchYouTube(trimmed, youTubeKey, controller.signal), setYouTube)
+      settle(searchYouTube(trimmed, youTubeKey, controller.signal), setYouTube)
     }, 350)
 
     return () => {
       window.clearTimeout(timer)
       controller.abort()
     }
-  }, [trimmed, attempt, youTubeKey])
+  }, [trimmed, attempt])
 
   if (!trimmed) {
     return (
       <div>
         <h1 className="page-title">Buscar</h1>
         <YouTubeLink />
-        {!youTubeKey && <YouTubeConnect />}
         <div className="genre-grid">
           {GENRES.map((genre) => (
             <button
@@ -118,10 +116,6 @@ export function Search({ query, navigate }: { query: string; navigate: Navigate 
             </button>
           ))}
         </div>
-        <p className="page-footer">
-          Sem chave de API: cole o link de uma música e ela toca inteira no player do YouTube. Com a
-          chave gratuita, a busca encontra vídeos de música diretamente.
-        </p>
       </div>
     )
   }
@@ -136,11 +130,7 @@ export function Search({ query, navigate }: { query: string; navigate: Navigate 
 
       <Section
         title="YouTube · músicas completas"
-        note={
-          youTubeKey
-            ? 'Qualquer artista · vídeos inteiros no player do YouTube'
-            : 'Cole um link para tocar inteira, sem chave'
-        }
+        note="Qualquer artista · vídeos inteiros no player do YouTube"
         action={youTube.status === 'ready' && youTube.tracks.length > 0 ? 'Tocar tudo' : undefined}
         onAction={() => {
           if (youTubeIds.length) playQueue(youTubeIds, youTubeIds[0])
@@ -148,16 +138,14 @@ export function Search({ query, navigate }: { query: string; navigate: Navigate 
       >
         <YouTubeLink />
 
-        {!youTubeKey && <YouTubeConnect />}
-
-        {youTubeKey && youTube.status === 'loading' && (
+        {youTube.status === 'loading' && (
           <div className="search-status">
             <span className="spinner" aria-hidden="true" />
             Buscando no YouTube…
           </div>
         )}
 
-        {youTubeKey && youTube.status === 'error' && (
+        {youTube.status === 'error' && (
           <div className="search-error">
             <span>{youTube.error}</span>
             <button type="button" className="retry-button" onClick={() => setAttempt((n) => n + 1)}>
@@ -166,18 +154,16 @@ export function Search({ query, navigate }: { query: string; navigate: Navigate 
           </div>
         )}
 
-        {youTubeKey && youTube.status === 'ready' && youTube.tracks.length === 0 && (
+        {youTube.status === 'ready' && youTube.tracks.length === 0 && (
           <div className="search-status">
             Nenhum vídeo tocável para “{trimmed}”. Clipes oficiais que bloqueiam incorporação são
             filtrados — tente incluir “áudio”, “lyrics” ou cole o link direto da música.
           </div>
         )}
 
-        {youTubeKey && youTube.status === 'ready' && youTube.tracks.length > 0 && (
+        {youTube.status === 'ready' && youTube.tracks.length > 0 && (
           <TrackResults tracks={youTube.tracks} />
         )}
-
-        {youTubeKey && <YouTubeConnect />}
       </Section>
 
       <Section

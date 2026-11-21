@@ -60,10 +60,7 @@ export function YouTubeLink() {
           {status === 'loading' ? 'Carregando…' : 'Tocar agora'}
         </button>
       </div>
-      <p className="yt-link-hint">
-        Funciona sem chave de API: a música toca inteira no player do YouTube. Para buscar sem link,
-        conecte a chave gratuita abaixo.
-      </p>
+      <p className="yt-link-hint">A música toca inteira no player do YouTube.</p>
       {status === 'error' && <p className="yt-link-error">{message}</p>}
     </form>
   )
