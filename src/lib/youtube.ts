@@ -233,6 +233,104 @@ export async function trackFromYouTubeLink(link: string): Promise<Track | null> 
 }
 
 const cache = new Map<string, Track[]>()
+const keylessCache = new Map<string, Track[]>()
+
+/* ---------------- busca sem chave (qualquer artista, sem cota) ---------------- */
+
+type PipedSearchItem = {
+  url?: string
+  type?: string
+  title?: string
+  uploaderName?: string
+  duration?: number
+}
+
+/** Instâncias públicas do Piped: respondem com CORS liberado e não pedem chave. */
+const PIPED_HOSTS = ['api.piped.private.coffee', 'pipedapi.ducks.party']
+const WATCH_ID = /[?&]v=([a-zA-Z0-9_-]{11})/
+
+const trackFromPiped = (item: PipedSearchItem): Track | null => {
+  if (item.type && item.type !== 'stream') return null
+  const videoId = WATCH_ID.exec(item.url ?? '')?.[1]
+  if (!videoId) return null
+  const seconds = Number(item.duration ?? 0)
+  if (!Number.isFinite(seconds) || seconds < 45) return null
+  const title = decodeEntity(item.title ?? '').trim()
+  if (!title) return null
+  const uploader = decodeEntity(item.uploaderName ?? 'YouTube').trim() || 'YouTube'
+
+  return {
+    id: `yt:${videoId}`,
+    title,
+    artist: uploader.replace(/\s*-\s*Topic$/, ''),
+    albumId: 'youtube',
+    albumTitle: uploader,
+    cover: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+    src: '',
+    genre: 'YouTube',
+    year: 0,
+    position: 0,
+    duration: Math.round(seconds),
+    external: true,
+    provider: 'youtube',
+    videoId,
+  }
+}
+
+async function searchYouTubeWithoutKey(query: string, signal?: AbortSignal): Promise<Track[]> {
+  let lastError: unknown = null
+
+  for (const host of PIPED_HOSTS) {
+    try {
+      const params = new URLSearchParams({ q: query, filter: 'music_songs' })
+      const response = await fetch(`https://${host}/search?${params.toString()}`, { signal })
+      if (!response.ok) throw new Error(`A busca pública respondeu ${response.status}.`)
+      const payload = (await response.json()) as { items?: PipedSearchItem[] }
+      const tracks = (payload.items ?? [])
+        .map(trackFromPiped)
+        .filter((track): track is Track => Boolean(track))
+      if (tracks.length) return tracks
+      lastError = new Error('A busca pública não devolveu faixas.')
+    } catch (error) {
+      if (signal?.aborted) throw error
+      lastError = error
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error('Busca do YouTube indisponível.')
+}
+
+/**
+ * Busca músicas completas de qualquer artista na busca pública do YouTube (sem chave e sem
+ * cota) e só recorre à API oficial quando as instâncias públicas não respondem.
+ */
+export async function searchYouTubeSongs(
+  term: string,
+  apiKey: string,
+  signal?: AbortSignal,
+  limit = 20,
+): Promise<Track[]> {
+  const query = term.trim()
+  if (query.length < 2) return []
+
+  const cacheKey = `${limit}:${query.toLowerCase()}`
+  const cached = keylessCache.get(cacheKey)
+  if (cached) return cached
+
+  let tracks: Track[]
+  try {
+    tracks = await searchYouTubeWithoutKey(query, signal)
+  } catch (error) {
+    if (signal?.aborted) throw error
+    tracks = await searchYouTube(query, apiKey, signal, limit)
+  }
+
+  const result = tracks.slice(0, limit)
+  registerTracks(result)
+  if (keylessCache.size > 40) keylessCache.delete(keylessCache.keys().next().value as string)
+  keylessCache.set(cacheKey, result)
+  return result
+}
 
 /** Busca músicas completas no YouTube (vídeos de música) e devolve faixas tocáveis. */
 export async function searchYouTube(

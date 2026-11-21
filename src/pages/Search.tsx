@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ALBUMS, GENRES, searchCatalog, type Track } from '../lib/catalog'
 import { searchFullSongs } from '../lib/audius'
-import { searchYouTube, YOUTUBE_API_KEY } from '../lib/youtube'
+import { searchYouTubeSongs, YOUTUBE_API_KEY } from '../lib/youtube'
 import { AlbumCard, MediaCard, Section, TrackRow } from '../components/Cards'
 import { YouTubeLink } from '../components/YouTubeLink'
 import { usePlayer } from '../lib/player'
@@ -89,7 +89,7 @@ export function Search({ query, navigate }: { query: string; navigate: Navigate 
 
     const timer = window.setTimeout(() => {
       settle(searchFullSongs(trimmed, controller.signal), setFull)
-      settle(searchYouTube(trimmed, youTubeKey, controller.signal), setYouTube)
+      settle(searchYouTubeSongs(trimmed, youTubeKey, controller.signal), setYouTube)
     }, 350)
 
     return () => {
