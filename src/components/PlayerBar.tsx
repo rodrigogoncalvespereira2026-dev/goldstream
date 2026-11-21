@@ -1,5 +1,5 @@
 import { formatTime } from '../lib/format'
-import { usePlayer } from '../lib/player'
+import { usePlayer, usePlayerTime } from '../lib/player'
 import { Slider } from './Slider'
 import { CoverImage } from './CoverImage'
 import {
@@ -19,12 +19,9 @@ export function PlayerBar() {
   const {
     current,
     isPlaying,
-    currentTime,
-    duration,
     toggle,
     next,
     prev,
-    seek,
     shuffle,
     toggleShuffle,
     repeat,
@@ -36,6 +33,7 @@ export function PlayerBar() {
     isLiked,
     toggleLike,
   } = usePlayer()
+  const { currentTime, duration, seek } = usePlayerTime()
 
   const liked = current ? isLiked(current.id) : false
   const effectiveVolume = muted ? 0 : volume

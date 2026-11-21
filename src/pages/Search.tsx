@@ -3,7 +3,6 @@ import { ALBUMS, GENRES, searchCatalog, type Track } from '../lib/catalog'
 import { searchFullSongs } from '../lib/audius'
 import { searchYouTubeSongs, YOUTUBE_API_KEY } from '../lib/youtube'
 import { AlbumCard, MediaCard, Section, TrackRow } from '../components/Cards'
-import { YouTubeLink } from '../components/YouTubeLink'
 import { usePlayer } from '../lib/player'
 import type { Navigate } from '../lib/nav'
 
@@ -102,7 +101,6 @@ export function Search({ query, navigate }: { query: string; navigate: Navigate 
     return (
       <div>
         <h1 className="page-title">Buscar</h1>
-        <YouTubeLink />
         <div className="genre-grid">
           {GENRES.map((genre) => (
             <button
@@ -136,8 +134,6 @@ export function Search({ query, navigate }: { query: string; navigate: Navigate 
           if (youTubeIds.length) playQueue(youTubeIds, youTubeIds[0])
         }}
       >
-        <YouTubeLink />
-
         {youTube.status === 'loading' && (
           <div className="search-status">
             <span className="spinner" aria-hidden="true" />
@@ -203,7 +199,7 @@ export function Search({ query, navigate }: { query: string; navigate: Navigate 
       </Section>
 
       {(local.tracks.length > 0 || local.albums.length > 0 || local.artists.length > 0) && (
-        <Section title="Na sua biblioteca" note="Catálogo de demonstração">
+        <Section title="No catálogo" note="Catálogo de demonstração">
           {local.tracks.length > 0 && <TrackResults tracks={local.tracks} showAlbum={false} />}
 
           {local.albums.length > 0 && (

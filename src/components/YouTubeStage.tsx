@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { usePlayer } from '../lib/player'
 
 /**
@@ -10,6 +10,7 @@ import { usePlayer } from '../lib/player'
 export function YouTubeStage() {
   const { current, attachStage, playerNotice } = usePlayer()
   const hostRef = useRef<HTMLDivElement>(null)
+  const [attempt, setAttempt] = useState(0)
   const isYouTube = current?.provider === 'youtube'
 
   useEffect(() => {
@@ -26,16 +27,19 @@ export function YouTubeStage() {
       attachStage(null)
       mount.remove()
     }
-  }, [isYouTube, attachStage])
-
-  if (!isYouTube) return null
+  }, [isYouTube, attachStage, attempt])
 
   return (
     <>
-      <div className="yt-sink" ref={hostRef} aria-hidden="true" />
+      {isYouTube && <div className="yt-sink" ref={hostRef} aria-hidden="true" />}
       {playerNotice && (
         <p className="player-toast" role="status">
-          {playerNotice}
+          <span>{playerNotice.message}</span>
+          {playerNotice.retry && (
+            <button type="button" className="toast-retry" onClick={() => setAttempt((n) => n + 1)}>
+              Tentar de novo
+            </button>
+          )}
         </p>
       )}
     </>

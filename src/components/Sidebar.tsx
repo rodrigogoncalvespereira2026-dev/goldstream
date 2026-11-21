@@ -2,7 +2,7 @@ import { PLAYLISTS } from '../lib/catalog'
 import type { Navigate, View } from '../lib/nav'
 import { usePlayer } from '../lib/player'
 import { cx, plural } from '../lib/format'
-import { HeartIcon, HomeIcon, LibraryIcon, LogoMark, SearchIcon } from './Icons'
+import { HeartIcon, HomeIcon, LibraryIcon, LogoMark, SearchIcon, SettingsIcon } from './Icons'
 
 type SidebarProps = {
   view: View
@@ -44,6 +44,14 @@ export function Sidebar({ view, navigate }: SidebarProps) {
           >
             <LibraryIcon size={25} />
             <span>Sua biblioteca</span>
+          </button>
+          <button
+            type="button"
+            className={cx('nav-item', view.type === 'settings' && 'is-active')}
+            onClick={() => navigate({ type: 'settings' })}
+          >
+            <SettingsIcon size={25} />
+            <span>Definições</span>
           </button>
         </nav>
       </div>

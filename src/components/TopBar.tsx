@@ -5,6 +5,7 @@ import {
   HomeIcon,
   LibraryIcon,
   SearchIcon,
+  SettingsIcon,
 } from './Icons'
 import type { Navigate, View } from '../lib/nav'
 import { cx } from '../lib/format'
@@ -70,7 +71,13 @@ export function TopBar({
       </label>
 
       <div className="topbar-right">
-        <button type="button" className="user-chip" aria-label="Perfil do ouvinte">
+        <button
+          type="button"
+          className="user-chip"
+          onClick={() => navigate({ type: 'settings' })}
+          aria-label="Abrir definições"
+          title="Definições"
+        >
           <span className="avatar">O</span>
           <span className="user-name">Ouvinte</span>
         </button>
@@ -108,6 +115,14 @@ export function TopBar({
           aria-label="Músicas curtidas"
         >
           <HeartIcon size={22} />
+        </button>
+        <button
+          type="button"
+          className={cx(view.type === 'settings' && 'is-active')}
+          onClick={() => navigate({ type: 'settings' })}
+          aria-label="Definições"
+        >
+          <SettingsIcon size={22} />
         </button>
       </nav>
     </div>

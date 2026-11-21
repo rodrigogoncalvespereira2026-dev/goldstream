@@ -17,6 +17,7 @@ export type YTPlayer = {
   getCurrentTime?: () => number
   getDuration?: () => number
   loadVideoById?: (videoId: string) => void
+  cueVideoById?: (videoId: string) => void
   destroy?: () => void
 }
 
@@ -45,6 +46,12 @@ type YouTubeWindow = Window & {
 
 let apiPromise: Promise<void> | null = null
 
+const API_SCRIPT = 'https://www.youtube.com/iframe_api'
+
+const removeApiScript = (): void => {
+  document.querySelector(`script[src="${API_SCRIPT}"]`)?.remove()
+}
+
 export const getYT = (): YTNamespace | undefined => (window as YouTubeWindow).YT
 
 export function loadYouTubeApi(): Promise<void> {
@@ -59,17 +66,26 @@ export function loadYouTubeApi(): Promise<void> {
       resolve()
     }
 
-    if (!document.querySelector('script[src="https://www.youtube.com/iframe_api"]')) {
+    if (!document.querySelector(`script[src="${API_SCRIPT}"]`)) {
       const script = document.createElement('script')
-      script.src = 'https://www.youtube.com/iframe_api'
+      script.src = API_SCRIPT
       script.async = true
-      script.onerror = () => reject(new Error('Não foi possível carregar o player do YouTube.'))
+      script.onerror = () => {
+        removeApiScript()
+        reject(new Error('Não foi possível carregar o player do YouTube.'))
+      }
       document.head.appendChild(script)
     }
 
     window.setTimeout(() => {
-      if (!youtube.YT?.Player) reject(new Error('O player do YouTube demorou para carregar.'))
+      if (youtube.YT?.Player) return
+      removeApiScript()
+      reject(new Error('O player do YouTube demorou para carregar.'))
     }, 15000)
+  }).catch((error: unknown) => {
+    // Sem limpar a promise, um bloqueio momentâneo impediria novas tentativas na sessão.
+    apiPromise = null
+    throw error
   })
 
   return apiPromise
@@ -201,7 +217,12 @@ export const parseYouTubeLink = (value: string): string | null => {
     return id && VIDEO_ID.test(id) ? id : null
   }
 
-  if (host.endsWith('youtube.com') || host === 'youtube-nocookie.com') {
+  if (
+    host === 'youtube.com' ||
+    host.endsWith('.youtube.com') ||
+    host === 'youtube-nocookie.com' ||
+    host.endsWith('.youtube-nocookie.com')
+  ) {
     const fromQuery = url.searchParams.get('v')
     if (fromQuery && VIDEO_ID.test(fromQuery)) return fromQuery
     const parts = url.pathname.split('/').filter(Boolean)

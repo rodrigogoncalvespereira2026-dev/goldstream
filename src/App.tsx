@@ -6,6 +6,7 @@ import { YouTubeStage } from './components/YouTubeStage'
 import { Home } from './pages/Home'
 import { Search } from './pages/Search'
 import { Library } from './pages/Library'
+import { Settings } from './pages/Settings'
 import { Collection } from './pages/Collection'
 import { PlayerProvider, usePlayer } from './lib/player'
 import { GENRES, getAlbum, getPlaylist } from './lib/catalog'
@@ -62,10 +63,14 @@ function Shell() {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
       if (
-        target &&
-        (target.tagName === 'INPUT' ||
-          target.tagName === 'TEXTAREA' ||
-          target.isContentEditable)
+        event.defaultPrevented ||
+        (target &&
+          (target.tagName === 'INPUT' ||
+            target.tagName === 'TEXTAREA' ||
+            target.tagName === 'SELECT' ||
+            target.tagName === 'A' ||
+            target.isContentEditable ||
+            target.closest('button, [role="button"], [role="slider"]')))
       ) {
         return
       }
@@ -98,6 +103,8 @@ function Shell() {
         return <Search query={query} navigate={navigate} />
       case 'library':
         return <Library navigate={navigate} />
+      case 'settings':
+        return <Settings />
       case 'album':
       case 'playlist':
       case 'liked':
@@ -120,7 +127,10 @@ function Shell() {
           <div
             className="scroller"
             ref={scrollerRef}
-            onScroll={(event) => setScrolled(event.currentTarget.scrollTop > 16)}
+            onScroll={(event) => {
+              const next = event.currentTarget.scrollTop > 16
+              setScrolled((previous) => (previous === next ? previous : next))
+            }}
           >
             <TopBar
               view={view}

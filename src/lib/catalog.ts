@@ -251,7 +251,13 @@ export const PLAYLISTS: Playlist[] = [
 export const getPlaylist = (id: string | undefined): Playlist | undefined =>
   PLAYLISTS.find((playlist) => playlist.id === id)
 
-export type GenreTile = { name: string; from: string; to: string }
+export type GenreTile = {
+  name: string
+  from: string
+  to: string
+  /** Gêneros do catálogo que alimentam o tile quando o nome do tile não é um gênero de álbum. */
+  sources?: string[]
+}
 
 export const GENRES: GenreTile[] = [
   { name: 'Synthwave', from: '#7b2ff7', to: '#3a0d6b' },
@@ -260,10 +266,10 @@ export const GENRES: GenreTile[] = [
   { name: 'Rock', from: '#e2461f', to: '#5a1508' },
   { name: 'R&B', from: '#a83fd4', to: '#3d0f52' },
   { name: 'House', from: '#12c2a8', to: '#083f3a' },
-  { name: 'Chill', from: '#4f8de0', to: '#14294c' },
-  { name: 'Foco', from: '#5c6bc0', to: '#1a1f3d' },
-  { name: 'Festa', from: '#e3358a', to: '#5c0f34' },
-  { name: 'Acústico', from: '#c9a227', to: '#4a3a08' },
+  { name: 'Chill', from: '#4f8de0', to: '#14294c', sources: ['Ambient', 'R&B'] },
+  { name: 'Foco', from: '#5c6bc0', to: '#1a1f3d', sources: ['Ambient'] },
+  { name: 'Festa', from: '#e3358a', to: '#5c0f34', sources: ['House', 'R&B'] },
+  { name: 'Acústico', from: '#c9a227', to: '#4a3a08', sources: ['Indie Folk'] },
 ]
 
 export const searchCatalog = (query: string) => {
@@ -280,4 +286,8 @@ export const searchCatalog = (query: string) => {
   return { tracks, albums, artists }
 }
 
-export const genreAlbums = (genre: string) => ALBUMS.filter((a) => a.genre === genre)
+export const genreAlbums = (genre: string): Album[] => {
+  const tile = GENRES.find((item) => item.name === genre)
+  const sources = tile?.sources?.length ? tile.sources : [genre]
+  return ALBUMS.filter((album) => sources.includes(album.genre))
+}

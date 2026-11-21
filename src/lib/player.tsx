@@ -14,11 +14,11 @@ import { getYT, loadYouTubeApi, type YTPlayer } from './youtube'
 
 type RepeatMode = 'off' | 'all' | 'one'
 
+export type PlayerNotice = { message: string; retry?: boolean }
+
 type PlayerValue = {
   current: Track | null
   isPlaying: boolean
-  currentTime: number
-  duration: number
   durations: Record<string, number>
   volume: number
   muted: boolean
@@ -31,7 +31,6 @@ type PlayerValue = {
   toggle: () => void
   next: () => void
   prev: () => void
-  seek: (seconds: number) => void
   changeVolume: (value: number) => void
   toggleMute: () => void
   toggleShuffle: () => void
@@ -39,10 +38,18 @@ type PlayerValue = {
   toggleLike: (id: string) => void
   isLiked: (id: string) => boolean
   attachStage: (element: HTMLElement | null) => void
-  playerNotice: string | null
+  playerNotice: PlayerNotice | null
+}
+
+/** Estado que muda a cada tique do player: só quem mostra o tempo assina este contexto. */
+type PlayerTimeValue = {
+  currentTime: number
+  duration: number
+  seek: (seconds: number) => void
 }
 
 const PlayerContext = createContext<PlayerValue | null>(null)
+const PlayerTimeContext = createContext<PlayerTimeValue | null>(null)
 
 const KEYS = {
   liked: 'sonora:liked',
@@ -68,8 +75,14 @@ const store = (key: string, value: unknown) => {
   }
 }
 
+/** Lê uma lista do storage sem quebrar se o valor salvo tiver outro formato. */
+const readArray = <T,>(key: string): T[] => {
+  const value = readStored<unknown>(key, [])
+  return Array.isArray(value) ? (value as T[]) : []
+}
+
 // Faixas externas já vistas: restauram curtidas e "tocadas recentemente" após recarregar.
-registerTracks(readStored<Track[]>(KEYS.tracks, []))
+registerTracks(readArray<Track>(KEYS.tracks))
 
 const shuffledFrom = (ids: string[], first: string | undefined): string[] => {
   const rest = ids.filter((id) => id !== first)
@@ -84,7 +97,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const ytTimerRef = useRef<number | null>(null)
 
   const [stageEl, setStageEl] = useState<HTMLElement | null>(null)
-  const [playerNotice, setPlayerNotice] = useState<string | null>(null)
+  const [playerNotice, setPlayerNotice] = useState<PlayerNotice | null>(null)
   const [order, setOrder] = useState<string[]>([])
   const [contextQueue, setContextQueue] = useState<string[]>([])
   const [pos, setPos] = useState(-1)
@@ -99,8 +112,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [muted, setMuted] = useState(false)
   const [shuffle, setShuffle] = useState(false)
   const [repeat, setRepeat] = useState<RepeatMode>('off')
-  const [liked, setLiked] = useState<string[]>(() => readStored<string[]>(KEYS.liked, []))
-  const [recent, setRecent] = useState<string[]>(() => readStored<string[]>(KEYS.recent, []))
+  const [liked, setLiked] = useState<string[]>(() => readArray<string>(KEYS.liked))
+  const [recent, setRecent] = useState<string[]>(() => readArray<string>(KEYS.recent))
 
   const currentId = pos >= 0 ? order[pos] : undefined
   const current = useMemo(() => getTrack(currentId) ?? null, [currentId])
@@ -114,6 +127,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   volumeRef.current = volume
   const mutedRef = useRef(muted)
   mutedRef.current = muted
+  const isPlayingRef = useRef(isPlaying)
+  isPlayingRef.current = isPlaying
+  const currentTimeRef = useRef(currentTime)
+  currentTimeRef.current = currentTime
   const endedRef = useRef<() => void>(() => {})
 
   const stopYtTimer = useCallback(() => {
@@ -151,11 +168,24 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     const onTime = () => setCurrentTime(audio.currentTime)
     const onMeta = () => {
       if (Number.isFinite(audio.duration) && audio.duration > 0) setDuration(audio.duration)
+      setPlayerNotice(null)
     }
     const onEnded = () => endedRef.current()
-    const onPlay = () => setIsPlaying(true)
-    const onPause = () => setIsPlaying(false)
+    // Quando a faixa atual é do YouTube, o áudio é pausado de propósito: esses eventos
+    // não podem mexer no isPlaying, que agora pertence ao outro motor.
+    const onPlay = () => {
+      if (currentRef.current?.provider !== 'youtube') setIsPlaying(true)
+    }
+    const onPause = () => {
+      if (currentRef.current?.provider !== 'youtube') setIsPlaying(false)
+    }
     const onVolume = () => setMuted(audio.muted)
+    const onError = () => {
+      if (currentRef.current?.provider === 'youtube') return
+      if (!audio.getAttribute('src')) return
+      setIsPlaying(false)
+      setPlayerNotice({ message: 'Não foi possível tocar esta faixa. Tente outra.' })
+    }
 
     audio.addEventListener('timeupdate', onTime)
     audio.addEventListener('loadedmetadata', onMeta)
@@ -164,6 +194,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     audio.addEventListener('play', onPlay)
     audio.addEventListener('pause', onPause)
     audio.addEventListener('volumechange', onVolume)
+    audio.addEventListener('error', onError)
 
     return () => {
       audio.pause()
@@ -175,6 +206,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       audio.removeEventListener('play', onPlay)
       audio.removeEventListener('pause', onPause)
       audio.removeEventListener('volumechange', onVolume)
+      audio.removeEventListener('error', onError)
       audioRef.current = null
       loadedIdRef.current = null
     }
@@ -192,6 +224,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     }
     if (loadedIdRef.current !== current.id) {
       loadedIdRef.current = current.id
+      setPlayerNotice(null)
       audio.src = current.src
       setCurrentTime(0)
       setDuration(durations[current.id] ?? current.duration ?? 0)
@@ -227,18 +260,31 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       try {
         await loadYouTubeApi()
       } catch {
+        if (!cancelled) {
+          setPlayerNotice({
+            message:
+              'Não foi possível carregar o player do YouTube. Verifique bloqueadores de anúncio e tente de novo.',
+            retry: true,
+          })
+        }
         return
       }
       if (cancelled) return
       const YT = getYT()
-      if (!YT?.Player) return
+      if (!YT?.Player) {
+        setPlayerNotice({
+          message: 'O player do YouTube não está disponível agora. Tente de novo.',
+          retry: true,
+        })
+        return
+      }
 
       const startVideo = currentRef.current?.videoId
       const player = new YT.Player(stageEl, {
         width: '100%',
         height: '100%',
         playerVars: {
-          autoplay: 1,
+          autoplay: 0,
           rel: 0,
           playsinline: 1,
           modestbranding: 1,
@@ -247,16 +293,21 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         ...(startVideo ? { videoId: startVideo } : {}),
         events: {
           onReady: (event) => {
+            if (cancelled || currentRef.current?.provider !== 'youtube') return
             const instance = event.target
             const track = currentRef.current
             setPlayerNotice(null)
             try {
               instance.setVolume?.(mutedRef.current ? 0 : Math.round(volumeRef.current * 100))
               if (track?.videoId) {
-                if (startVideo !== track.videoId) instance.loadVideoById?.(track.videoId)
+                if (startVideo !== track.videoId) {
+                  if (isPlayingRef.current) instance.loadVideoById?.(track.videoId)
+                  else instance.cueVideoById?.(track.videoId)
+                } else if (isPlayingRef.current) {
+                  instance.playVideo?.()
+                }
                 ytVideoRef.current = track.videoId
-                setDuration((value) => value || track.duration || 0)
-                instance.playVideo?.()
+                setDuration(track.duration ?? 0)
               }
             } catch {
               /* ignore */
@@ -264,6 +315,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
             startYtTimer(instance)
           },
           onStateChange: (event) => {
+            if (cancelled || currentRef.current?.provider !== 'youtube') return
             const state = event.data
             if (state === 1) {
               setIsPlaying(true)
@@ -280,15 +332,17 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
             }
           },
           onError: (event) => {
+            if (cancelled || currentRef.current?.provider !== 'youtube') return
             stopYtTimer()
             setIsPlaying(false)
-            setPlayerNotice(
-              event.data === 101 || event.data === 150
-                ? 'Esta faixa não abre no player daqui. Escolha outra.'
-                : event.data === 100
-                  ? 'Esta música não está mais disponível.'
-                  : 'Não foi possível tocar esta música agora.',
-            )
+            setPlayerNotice({
+              message:
+                event.data === 101 || event.data === 150
+                  ? 'Esta faixa não abre no player daqui. Escolha outra.'
+                  : event.data === 100
+                    ? 'Esta música não está mais disponível.'
+                    : 'Não foi possível tocar esta música agora.',
+            })
           },
         },
       })
@@ -315,15 +369,16 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // Troca o vídeo quando a faixa atual muda.
   useEffect(() => {
     if (!isYouTube || !current?.videoId) return
+    setPlayerNotice(null)
+    setCurrentTime(0)
+    setDuration(current.duration ?? 0)
     const player = ytPlayerRef.current
     if (!player) return
     if (ytVideoRef.current === current.videoId) return
     ytVideoRef.current = current.videoId
-    setPlayerNotice(null)
-    setCurrentTime(0)
-    setDuration(current.duration ?? 0)
     try {
-      player.loadVideoById?.(current.videoId)
+      if (isPlayingRef.current) player.loadVideoById?.(current.videoId)
+      else player.cueVideoById?.(current.videoId)
     } catch {
       /* ignore */
     }
@@ -466,12 +521,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const prev = useCallback(() => {
-    if (currentTime > 3) {
+    if (currentTimeRef.current > 3) {
       seek(0)
       return
     }
     step(-1)
-  }, [currentTime, seek, step])
+  }, [seek, step])
 
   const changeVolume = useCallback((value: number) => {
     const clamped = Math.min(1, Math.max(0, value))
@@ -537,39 +592,79 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     duration ||
     (currentId ? durations[currentId] ?? current?.duration ?? 0 : 0)
 
-  const value: PlayerValue = {
-    current,
-    isPlaying,
-    currentTime,
-    duration: effectiveDuration,
-    durations,
-    volume,
-    muted,
-    shuffle,
-    repeat,
-    liked,
-    recent,
-    playQueue,
-    playTrack,
-    toggle,
-    next,
-    prev,
-    seek,
-    changeVolume,
-    toggleMute,
-    toggleShuffle,
-    cycleRepeat,
-    toggleLike,
-    isLiked,
-    attachStage,
-    playerNotice,
-  }
+  // O tempo muda a cada tique; mantê-lo fora deste contexto evita re-renderizar
+  // listas, cards e o resto da página várias vezes por segundo.
+  const timeValue = useMemo<PlayerTimeValue>(
+    () => ({ currentTime, duration: effectiveDuration, seek }),
+    [currentTime, effectiveDuration, seek],
+  )
 
-  return <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>
+  const value = useMemo<PlayerValue>(
+    () => ({
+      current,
+      isPlaying,
+      durations,
+      volume,
+      muted,
+      shuffle,
+      repeat,
+      liked,
+      recent,
+      playQueue,
+      playTrack,
+      toggle,
+      next,
+      prev,
+      changeVolume,
+      toggleMute,
+      toggleShuffle,
+      cycleRepeat,
+      toggleLike,
+      isLiked,
+      attachStage,
+      playerNotice,
+    }),
+    [
+      current,
+      isPlaying,
+      durations,
+      volume,
+      muted,
+      shuffle,
+      repeat,
+      liked,
+      recent,
+      playQueue,
+      playTrack,
+      toggle,
+      next,
+      prev,
+      changeVolume,
+      toggleMute,
+      toggleShuffle,
+      cycleRepeat,
+      toggleLike,
+      isLiked,
+      attachStage,
+      playerNotice,
+    ],
+  )
+
+  return (
+    <PlayerContext.Provider value={value}>
+      <PlayerTimeContext.Provider value={timeValue}>{children}</PlayerTimeContext.Provider>
+    </PlayerContext.Provider>
+  )
 }
 
 export const usePlayer = (): PlayerValue => {
   const context = useContext(PlayerContext)
   if (!context) throw new Error('usePlayer precisa estar dentro de <PlayerProvider>')
+  return context
+}
+
+export const usePlayerTime = (): PlayerTimeValue => {
+  const context = useContext(PlayerTimeContext)
+  if (!context) throw new Error('usePlayerTime precisa estar dentro de <PlayerProvider>')
   return context
 }

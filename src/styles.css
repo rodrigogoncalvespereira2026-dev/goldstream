@@ -442,6 +442,14 @@ img {
   color: var(--muted);
 }
 
+.settings-note {
+  max-width: 640px;
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
 .search-status {
   display: flex;
   align-items: center;
@@ -678,7 +686,10 @@ img {
   right: 20px;
   bottom: calc(var(--player-h) + 20px);
   z-index: 60;
-  max-width: 340px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 380px;
   padding: 10px 14px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 10px;
@@ -687,6 +698,26 @@ img {
   font-size: 12.5px;
   line-height: 1.4;
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.65);
+}
+
+.player-toast > span {
+  flex: 1 1 auto;
+}
+
+.toast-retry {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.toast-retry:hover {
+  background: rgba(255, 255, 255, 0.1);
 }
 
 @media (max-width: 760px) {
