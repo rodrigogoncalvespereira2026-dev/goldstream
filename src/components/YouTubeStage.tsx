@@ -2,8 +2,9 @@ import { useEffect, useRef } from 'react'
 import { usePlayer } from '../lib/player'
 
 /**
- * Card com o player do YouTube. Precisa ficar visível: o YouTube não permite
- * reproduzir embeds escondidos. O nó que o YT substitui por um iframe é criado
+ * O som das faixas do YouTube sai do player embutido, mas o app é de música: o
+ * player fica montado fora de vista (no tamanho mínimo exigido pelo YouTube) e
+ * nada de vídeo aparece na tela. O nó que o YT substitui por um iframe é criado
  * fora do React para não quebrar a reconciliação.
  */
 export function YouTubeStage() {
@@ -17,7 +18,7 @@ export function YouTubeStage() {
     if (!host) return
 
     const mount = document.createElement('div')
-    mount.className = 'yt-stage-mount'
+    mount.className = 'yt-sink-mount'
     host.appendChild(mount)
     attachStage(mount)
 
@@ -30,13 +31,13 @@ export function YouTubeStage() {
   if (!isYouTube) return null
 
   return (
-    <aside className="yt-stage" aria-label="Player do YouTube">
-      <header className="yt-stage-head">
-        <span className="yt-stage-kicker">YouTube</span>
-        <span className="yt-stage-title">{current?.title}</span>
-      </header>
-      <div className="yt-stage-frame" ref={hostRef} />
-      {playerNotice && <p className="yt-stage-notice">{playerNotice}</p>}
-    </aside>
+    <>
+      <div className="yt-sink" ref={hostRef} aria-hidden="true" />
+      {playerNotice && (
+        <p className="player-toast" role="status">
+          {playerNotice}
+        </p>
+      )}
+    </>
   )
 }

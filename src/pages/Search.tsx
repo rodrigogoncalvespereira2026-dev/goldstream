@@ -130,7 +130,7 @@ export function Search({ query, navigate }: { query: string; navigate: Navigate 
 
       <Section
         title="YouTube · músicas completas"
-        note="Qualquer artista · vídeos inteiros no player do YouTube"
+        note="Qualquer artista · faixas completas, sem limite de buscas"
         action={youTube.status === 'ready' && youTube.tracks.length > 0 ? 'Tocar tudo' : undefined}
         onAction={() => {
           if (youTubeIds.length) playQueue(youTubeIds, youTubeIds[0])
@@ -156,8 +156,8 @@ export function Search({ query, navigate }: { query: string; navigate: Navigate 
 
         {youTube.status === 'ready' && youTube.tracks.length === 0 && (
           <div className="search-status">
-            Nenhum vídeo tocável para “{trimmed}”. Clipes oficiais que bloqueiam incorporação são
-            filtrados — tente incluir “áudio”, “lyrics” ou cole o link direto da música.
+            Nenhuma música tocável para “{trimmed}”. Tente incluir “áudio” ou “lyrics” no termo, ou
+            cole o link direto da música.
           </div>
         )}
 

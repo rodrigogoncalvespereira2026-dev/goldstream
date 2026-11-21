@@ -284,10 +284,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
             setIsPlaying(false)
             setPlayerNotice(
               event.data === 101 || event.data === 150
-                ? 'Este vídeo não permite incorporação. Escolha outro resultado.'
+                ? 'Esta faixa não abre no player daqui. Escolha outra.'
                 : event.data === 100
-                  ? 'Este vídeo não está mais disponível.'
-                  : 'Não foi possível tocar este vídeo aqui.',
+                  ? 'Esta música não está mais disponível.'
+                  : 'Não foi possível tocar esta música agora.',
             )
           },
         },

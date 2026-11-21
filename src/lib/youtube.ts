@@ -114,6 +114,37 @@ export const decodeEntity = (value: string): string =>
     return match
   })
 
+const NOISE_PATTERN =
+  /\s*[([][^)\]]*\b(official|oficial|clipe|videoclipe|video|vídeo|audio|áudio|lyric|lyrics|letra|legendado|tradução|traducao|visualizer|ao vivo|live|remaster\w*|hd|hq|4k|8k|performance)\b[^)\]]*[)\]]/gi
+
+/** Tira do título o que é de vídeo (Official Video, Lyrics, Ao Vivo, 4K…) e sobra a música. */
+export const songTitle = (raw: string): string =>
+  decodeEntity(raw)
+    .replace(NOISE_PATTERN, '')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/[\s\-–—|·]+$/g, '')
+    .trim()
+
+const deaccent = (value: string): string =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+
+/** Separa "Artista - Música" em música + artista, usando o canal como referência. */
+export const songFields = (
+  rawTitle: string,
+  channel: string,
+): { title: string; artist: string } => {
+  const artist = decodeEntity(channel).replace(/\s*-\s*Topic$/, '').trim() || 'YouTube'
+  let title = songTitle(rawTitle)
+  const parts = title.split(/\s+[-–—]\s+/)
+  if (parts.length > 1 && parts[0].length > 1 && deaccent(artist).includes(deaccent(parts[0]))) {
+    title = parts.slice(1).join(' - ')
+  }
+  return { title: title || songTitle(rawTitle) || artist, artist }
+}
+
 const parseIsoDuration = (iso: string | undefined): number | undefined => {
   if (!iso) return undefined
   const match = /^P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/.exec(iso)
@@ -255,16 +286,16 @@ const trackFromPiped = (item: PipedSearchItem): Track | null => {
   if (!videoId) return null
   const seconds = Number(item.duration ?? 0)
   if (!Number.isFinite(seconds) || seconds < 45) return null
-  const title = decodeEntity(item.title ?? '').trim()
-  if (!title) return null
+  if (!(item.title ?? '').trim()) return null
   const uploader = decodeEntity(item.uploaderName ?? 'YouTube').trim() || 'YouTube'
+  const song = songFields(item.title ?? '', uploader)
 
   return {
     id: `yt:${videoId}`,
-    title,
-    artist: uploader.replace(/\s*-\s*Topic$/, ''),
+    title: song.title,
+    artist: song.artist,
     albumId: 'youtube',
-    albumTitle: uploader,
+    albumTitle: 'YouTube',
     cover: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
     src: '',
     genre: 'YouTube',
@@ -387,12 +418,13 @@ export async function searchYouTube(
     if (seconds && seconds < 45) continue
 
     const channel = decodeEntity(snippet.channelTitle ?? 'YouTube')
+    const song = songFields(snippet.title, channel)
     tracks.push({
       id: `yt:${candidate.id.videoId}`,
-      title: decodeEntity(snippet.title),
-      artist: channel.replace(/\s*-\s*Topic$/, ''),
+      title: song.title,
+      artist: song.artist,
       albumId: 'youtube',
-      albumTitle: channel,
+      albumTitle: 'YouTube',
       cover: snippet.thumbnails?.high?.url ?? snippet.thumbnails?.medium?.url ?? '',
       src: '',
       genre: 'YouTube',

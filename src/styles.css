@@ -654,77 +654,46 @@ img {
   background: var(--accent);
 }
 
-.yt-stage {
+/* O player do YouTube fica montado mas fora de vista: aqui só se ouve, não se vê vídeo. */
+.yt-sink {
   position: fixed;
-  right: 20px;
-  bottom: calc(var(--player-h) + 20px);
-  z-index: 60;
-  width: 360px;
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 10px;
-  background: #0c0c0c;
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.65);
-}
-
-.yt-stage-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.yt-stage-kicker {
-  flex-shrink: 0;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #ff4d4d;
-}
-
-.yt-stage-title {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.yt-stage-frame {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  background: #000;
-}
-
-.yt-stage-notice {
-  position: absolute;
   right: 0;
-  bottom: 0;
-  left: 0;
-  padding: 10px 12px;
-  font-size: 12px;
-  line-height: 1.4;
-  color: #ffd7d7;
-  background: rgba(0, 0, 0, 0.82);
+  bottom: calc(var(--player-h) + 8px);
+  z-index: 0;
+  width: 320px;
+  height: 180px;
+  opacity: 0;
+  pointer-events: none;
 }
 
-.yt-stage-frame iframe,
-.yt-stage-mount {
-  position: absolute;
-  inset: 0;
+.yt-sink iframe,
+.yt-sink-mount {
   width: 100% !important;
   height: 100% !important;
   border: 0;
 }
 
+.player-toast {
+  position: fixed;
+  right: 20px;
+  bottom: calc(var(--player-h) + 20px);
+  z-index: 60;
+  max-width: 340px;
+  padding: 10px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: #1b1b1b;
+  color: #ffd7d7;
+  font-size: 12.5px;
+  line-height: 1.4;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.65);
+}
+
 @media (max-width: 760px) {
-  .yt-stage {
+  .player-toast {
     right: 10px;
     left: 10px;
-    width: auto;
-    bottom: calc(var(--player-h) + 10px);
+    max-width: none;
   }
 
   .connect-card {
