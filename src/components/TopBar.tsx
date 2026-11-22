@@ -1,17 +1,8 @@
-import {
-  ArrowLeftIcon,
-  ArrowRightIcon,
-  HeartIcon,
-  HomeIcon,
-  LibraryIcon,
-  SearchIcon,
-  SettingsIcon,
-} from './Icons'
-import type { Navigate, View } from '../lib/nav'
+import { ArrowLeftIcon, ArrowRightIcon, SearchIcon } from './Icons'
+import type { Navigate } from '../lib/nav'
 import { cx } from '../lib/format'
 
 type TopBarProps = {
-  view: View
   navigate: Navigate
   query: string
   onQuery: (value: string) => void
@@ -23,7 +14,6 @@ type TopBarProps = {
 }
 
 export function TopBar({
-  view,
   navigate,
   query,
   onQuery,
@@ -82,49 +72,6 @@ export function TopBar({
           <span className="user-name">Ouvinte</span>
         </button>
       </div>
-
-      <nav className="mobile-nav" aria-label="Navegação">
-        <button
-          type="button"
-          className={cx(view.type === 'home' && 'is-active')}
-          onClick={() => navigate({ type: 'home' })}
-          aria-label="Início"
-        >
-          <HomeIcon size={22} />
-        </button>
-        <button
-          type="button"
-          className={cx(view.type === 'search' && 'is-active')}
-          onClick={() => navigate({ type: 'search' })}
-          aria-label="Buscar"
-        >
-          <SearchIcon size={22} />
-        </button>
-        <button
-          type="button"
-          className={cx(view.type === 'library' && 'is-active')}
-          onClick={() => navigate({ type: 'library' })}
-          aria-label="Sua biblioteca"
-        >
-          <LibraryIcon size={22} />
-        </button>
-        <button
-          type="button"
-          className={cx(view.type === 'liked' && 'is-active')}
-          onClick={() => navigate({ type: 'liked' })}
-          aria-label="Músicas curtidas"
-        >
-          <HeartIcon size={22} />
-        </button>
-        <button
-          type="button"
-          className={cx(view.type === 'settings' && 'is-active')}
-          onClick={() => navigate({ type: 'settings' })}
-          aria-label="Definições"
-        >
-          <SettingsIcon size={22} />
-        </button>
-      </nav>
     </div>
   )
 }

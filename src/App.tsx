@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Sidebar } from './components/Sidebar'
 import { TopBar } from './components/TopBar'
 import { PlayerBar } from './components/PlayerBar'
+import { MobileNav } from './components/MobileNav'
 import { YouTubeStage } from './components/YouTubeStage'
 import { Home } from './pages/Home'
 import { Search } from './pages/Search'
@@ -133,7 +134,6 @@ function Shell() {
             }}
           >
             <TopBar
-              view={view}
               navigate={navigate}
               query={query}
               onQuery={handleQuery}
@@ -149,6 +149,7 @@ function Shell() {
       </div>
 
       <PlayerBar />
+      <MobileNav view={view} navigate={navigate} />
       <YouTubeStage />
     </div>
   )

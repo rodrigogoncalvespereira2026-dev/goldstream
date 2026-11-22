@@ -136,6 +136,12 @@ export const ArrowRightIcon = ({ size = 24, ...rest }: IconProps) => (
   </svg>
 )
 
+export const ChevronDownIcon = ({ size = 24, ...rest }: IconProps) => (
+  <svg {...base(size)} {...rest}>
+    <path d="m5 9 7 7 7-7" />
+  </svg>
+)
+
 export const VolumeIcon = ({ size = 24, level = 2, ...rest }: IconProps & { level?: 0 | 1 | 2 }) => (
   <svg {...base(size)} {...rest}>
     <path d="M4 9.5h3.2L12 5.4v13.2L7.2 14.5H4z" fill="currentColor" stroke="none" />
