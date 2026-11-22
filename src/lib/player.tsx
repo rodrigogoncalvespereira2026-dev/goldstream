@@ -126,6 +126,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const nativeQueueActiveRef = useRef(false)
   /** Faixas já entregues à fila nativa. */
   const nativeQueuedRef = useRef<Set<string>>(new Set())
+  /** Muda sempre que a fila nativa é reconstruída (cancela abastecimentos antigos). */
+  const queueGenerationRef = useRef(0)
   /** Faixa que a própria fila nativa começou (não precisa de ser tocada outra vez). */
   const nativeAdvancedRef = useRef<string | null>(null)
   const addRecentRef = useRef<(id: string) => void>(() => {})
@@ -152,6 +154,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // ecrã bloqueado. Sem URL, cai para o iframe (que pausa fora de primeiro plano).
   const [ytAudio, setYtAudio] = useState<Record<string, string>>({})
   const [ytAudioFailed, setYtAudioFailed] = useState<Record<string, boolean>>({})
+  /** Muda para obrigar a reconstruir a fila nativa (ex.: escolher outra faixa). */
+  const [queueNonce, setQueueNonce] = useState(0)
   const ytAudioRef = useRef(ytAudio)
   ytAudioRef.current = ytAudio
 
@@ -331,9 +335,21 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       const timeListener = await NativeAudio.addListener('currentTime', (event) => {
         if (!disposed) setCurrentTime(event.currentTime)
       })
-      const completeListener = await NativeAudio.addListener('complete', () => {
-        // Com fila nativa é o ExoPlayer que passa à faixa seguinte: nada a fazer aqui.
-        if (!disposed && !nativeQueueActiveRef.current) endedRef.current()
+      const completeListener = await NativeAudio.addListener('complete', (event) => {
+        if (disposed) return
+        // O plugin só emite "complete" quando NÃO conseguiu passar à faixa
+        // seguinte (fim da fila). Antes ficávamos à espera de um avanço que
+        // nunca vinha — a música travava. Agora a app assume a próxima.
+        const same = stateRef.current.repeat === 'one' && event.assetId
+        if (same) {
+          void NativeAudio.play({ assetId: event.assetId, time: 0 }).catch(() => {})
+          setCurrentTime(0)
+          return
+        }
+        nativeQueueActiveRef.current = false
+        nativeQueuedRef.current = new Set()
+        queueGenerationRef.current += 1
+        endedRef.current()
       })
       const queueListener = await NativeAudio.addListener('queueChange', (event) => {
         if (disposed || usesIframeRef.current) return
@@ -420,6 +436,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           nativeLoadedRef.current = null
           nativeQueueActiveRef.current = false
           nativeQueuedRef.current = new Set()
+          queueGenerationRef.current += 1
           await NativeAudio.clearQueue().catch(() => {})
           await silenceOthers(null)
           return
@@ -446,6 +463,25 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
         nativePlayingRef.current.add(track.id)
         if (cancelled) return
+
+        // É outra faixa da fila: o ExoPlayer tem de mudar para ela (senão ficava a
+        // tocar a anterior com a app a mostrar a nova).
+        if (nativeLoadedRef.current !== track.id) {
+          const selected = await NativeAudio.queueSelect({ assetId: track.id })
+            .then(() => true)
+            .catch(() => false)
+          if (cancelled) return
+          if (!selected) {
+            // A fila nativa não tem esta faixa: manda reconstruir a partir dela.
+            nativeQueuedRef.current = new Set()
+            nativeQueueActiveRef.current = false
+            queueGenerationRef.current += 1
+            setQueueNonce((value) => value + 1)
+            return
+          }
+          nativeLoadedRef.current = track.id
+        }
+
         await NativeAudio.resume({ assetId: track.id }).catch(() =>
           NativeAudio.play({ assetId: track.id }).catch(() => {}),
         )
@@ -487,11 +523,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
    */
   useEffect(() => {
     if (!nativePlatform || usesIframe || !current) return
-    if (nativeQueuedRef.current.has(current.id)) return
 
+    const headQueued = nativeQueuedRef.current.has(current.id)
     const ids = order.length ? order : [current.id]
     const startIndex = Math.max(0, ids.indexOf(current.id))
-    let cancelled = false
+    const generation = queueGenerationRef.current
 
     const srcFor = async (track: Track): Promise<string | null> => {
       if (track.videoId) {
@@ -503,46 +539,48 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     }
 
     void (async () => {
-      const headSrc = await srcFor(current)
-      if (cancelled || !headSrc) return
+      if (!headQueued) {
+        const headSrc = await srcFor(current)
+        if (queueGenerationRef.current !== generation) return
+        if (!headSrc) {
+          setPlayerNotice({ message: 'Não consegui preparar esta faixa. Tente outra.' })
+          return
+        }
 
-      await NativeAudio.clearQueue().catch(() => {})
-      if (cancelled) return
+        await NativeAudio.clearQueue().catch(() => {})
 
-      nativeQueuedRef.current = new Set([current.id])
-      nativeQueueActiveRef.current = true
-      nativeLoadedRef.current = current.id
-      nativePlayingRef.current.add(current.id)
+        nativeQueuedRef.current = new Set([current.id])
+        nativeQueueActiveRef.current = true
+        nativeLoadedRef.current = current.id
+        nativePlayingRef.current.add(current.id)
 
-      await NativeAudio.setQueue({
-        items: [nativeItem(current, headSrc)],
-        startIndex: 0,
-        autoPlay: isPlayingRef.current,
-      }).catch(() => {})
+        await NativeAudio.setQueue({
+          items: [nativeItem(current, headSrc)],
+          startIndex: 0,
+          autoPlay: isPlayingRef.current,
+        }).catch(() => {})
 
-      // Se carregou em pausa enquanto a faixa carregava, o setQueue pode já ter
-      // arrancado: volta a calar. Sem isto a música "não parava".
-      if (!intentRef.current.play) {
-        await NativeAudio.pause({ assetId: current.id }).catch(() => {})
+        // Se carregou em pausa enquanto a faixa carregava, o setQueue pode já ter
+        // arrancado: volta a calar. Sem isto a música "não parava".
+        if (!intentRef.current.play) {
+          await NativeAudio.pause({ assetId: current.id }).catch(() => {})
+        }
       }
 
-      // Vai preparando as seguintes: 14 faixas garantem horas de música sem JS.
-      for (const id of ids.slice(startIndex + 1)) {
-        if (cancelled || nativeQueuedRef.current.size >= 14) return
+      // Abastece as 14 seguintes (repetido a cada troca de faixa para a fila nunca
+      // chegar ao fim). Só um abastecimento novo interrompe este.
+      for (const id of ids.slice(startIndex + 1, startIndex + 15)) {
+        if (queueGenerationRef.current !== generation) return
         const track = getTrack(id)
         if (!track || nativeQueuedRef.current.has(id)) continue
         const src = await srcFor(track)
-        if (cancelled) return
+        if (queueGenerationRef.current !== generation) return
         if (!src) continue
         await NativeAudio.queueAdd({ items: [nativeItem(track, src)] }).catch(() => {})
         nativeQueuedRef.current.add(id)
       }
     })()
-
-    return () => {
-      cancelled = true
-    }
-  }, [current, order, nativePlatform, usesIframe])
+  }, [current, order, nativePlatform, usesIframe, queueNonce])
 
   // Repetir também é do motor nativo (uma faixa, a lista toda, ou nada).
   useEffect(() => {
@@ -846,13 +884,6 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   const step = useCallback(
     (direction: 1 | -1, auto = false) => {
-      // Com a fila nativa quem manda é o ExoPlayer: pedimos-lhe para avançar ou recuar,
-      // para as transições funcionarem também com o ecrã bloqueado.
-      if (!auto && nativeQueueActiveRef.current) {
-        setIntent(true)
-        void (direction > 0 ? NativeAudio.queueNext() : NativeAudio.queuePrevious()).catch(() => {})
-        return
-      }
       const { order: list, pos: index, repeat: mode } = stateRef.current
       if (!list.length) return
       let nextIndex = index + direction
