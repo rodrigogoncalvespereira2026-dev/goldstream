@@ -1,12 +1,16 @@
 import { useState } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { Section } from '../components/Cards'
-import { DownloadIcon, RefreshIcon } from '../components/Icons'
+import { DownloadIcon, RefreshIcon, SparkleIcon } from '../components/Icons'
 import { YouTubeLink } from '../components/YouTubeLink'
+import { BACKGROUNDS, useBackground } from '../lib/backgrounds'
 import { downloadUpdate, reloadApp } from '../lib/update'
+import type { Navigate } from '../lib/nav'
 
-export function Settings() {
+export function Settings({ navigate }: { navigate: Navigate }) {
   const [updateNote, setUpdateNote] = useState('')
+  const [background] = useBackground()
+  const currentBackground = BACKGROUNDS.find((item) => item.id === background)
 
   return (
     <div>
@@ -43,6 +47,28 @@ export function Settings() {
           </button>
         </div>
         {updateNote && <p className="settings-note settings-note-update">{updateNote}</p>}
+      </Section>
+
+      <Section title="Aparência" note="Fundos animados">
+        <p className="settings-note">
+          Troca o fundo da app por um cenário em movimento — aurora, pôr do sol, oceano, néon,
+          estrelas ou vinil. A escolha fica guardada para as próximas vezes.
+        </p>
+        <div className="settings-actions">
+          <button
+            type="button"
+            className="connect-button settings-action"
+            onClick={() => navigate({ type: 'backgrounds' })}
+          >
+            <SparkleIcon size={18} />
+            Fundos da tela
+          </button>
+          {currentBackground && (
+            <span className="settings-note settings-note-tech">
+              Fundo atual: {currentBackground.name}
+            </span>
+          )}
+        </div>
       </Section>
 
       <Section title="Tocar por link" note="Experimental">

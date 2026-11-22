@@ -178,6 +178,13 @@ export const MusicNoteIcon = ({ size = 24, ...rest }: IconProps) => (
   </svg>
 )
 
+export const SparkleIcon = ({ size = 24, ...rest }: IconProps) => (
+  <svg {...base(size)} {...rest}>
+    <path d="M11 4l1.7 4.6L17 10l-4.3 1.4L11 16l-1.7-4.6L5 10l4.3-1.4z" />
+    <path d="M17.5 15.5l.7 1.9 1.9.7-1.9.7-.7 1.9-.7-1.9-1.9-.7 1.9-.7z" />
+  </svg>
+)
+
 export const CheckIcon = ({ size = 24, ...rest }: IconProps) => (
   <svg {...base(size)} {...rest}>
     <path d="m5 12.5 4.5 4.5L19 7" />

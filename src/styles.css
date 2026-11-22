@@ -2750,3 +2750,298 @@ img {
     display: none;
   }
 }
+
+/* ---------------- Fundos animados ---------------- */
+
+.page-sub {
+  margin: -8px 0 22px;
+  max-width: 62ch;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.main > .scroller {
+  position: relative;
+  z-index: 1;
+}
+
+.bg-scene {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.bg-blob {
+  position: absolute;
+  display: block;
+  width: 48vmax;
+  height: 48vmax;
+  border-radius: 50%;
+  filter: blur(48px);
+  opacity: 0.6;
+  will-change: transform;
+  animation: bg-drift 22s ease-in-out infinite alternate;
+}
+
+.bg-blob.b {
+  animation-duration: 30s;
+  animation-direction: alternate-reverse;
+}
+
+.bg-blob.c {
+  animation-duration: 38s;
+  animation-delay: -9s;
+  opacity: 0.4;
+}
+
+.bg-shine {
+  position: absolute;
+  inset: -15%;
+  opacity: 0;
+  pointer-events: none;
+}
+
+@keyframes bg-drift {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(6%, -6%, 0) scale(1.12);
+  }
+  to {
+    transform: translate3d(-6%, 7%, 0) scale(1.05);
+  }
+}
+
+@keyframes bg-spin {
+  from {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+@keyframes bg-stars-scroll {
+  from {
+    background-position: 0 0, 0 0, 0 0, 0 0;
+  }
+  to {
+    background-position: 220px 440px, -180px 360px, 140px -320px, -260px 300px;
+  }
+}
+
+@keyframes bg-pulse {
+  from {
+    opacity: 0.35;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 0.75;
+    transform: scale(1.15);
+  }
+}
+
+/* Aurora */
+.bg-aurora .bg-blob.a {
+  top: -32%;
+  left: -18%;
+  background: #17c77a;
+}
+.bg-aurora .bg-blob.b {
+  right: -26%;
+  bottom: -38%;
+  background: #0e7490;
+}
+.bg-aurora .bg-blob.c {
+  top: 18%;
+  left: 32%;
+  background: #a3e635;
+}
+
+/* Pôr do sol */
+.bg-sunset .bg-blob.a {
+  top: -26%;
+  left: -12%;
+  background: #f97316;
+}
+.bg-sunset .bg-blob.b {
+  right: -24%;
+  bottom: -30%;
+  background: #db2777;
+}
+.bg-sunset .bg-blob.c {
+  top: 30%;
+  left: 40%;
+  background: #fbbf24;
+}
+
+/* Oceano */
+.bg-ocean .bg-blob.a {
+  bottom: -40%;
+  left: -20%;
+  background: #0284c7;
+}
+.bg-ocean .bg-blob.b {
+  top: -30%;
+  right: -22%;
+  background: #1e40af;
+}
+.bg-ocean .bg-blob.c {
+  top: 34%;
+  left: 26%;
+  background: #06b6d4;
+}
+
+/* Néon */
+.bg-neon .bg-blob.a {
+  top: -30%;
+  right: -18%;
+  background: #a855f7;
+}
+.bg-neon .bg-blob.b {
+  bottom: -34%;
+  left: -20%;
+  background: #22d3ee;
+}
+.bg-neon .bg-blob.c {
+  top: 26%;
+  left: 34%;
+  background: #f472b6;
+}
+
+/* Estrelas */
+.bg-stars {
+  background-color: #04060f;
+}
+.bg-stars .bg-blob {
+  display: none;
+}
+.bg-stars .bg-shine {
+  inset: 0;
+  opacity: 0.9;
+  background-image:
+    radial-gradient(1.6px 1.6px at 22px 34px, #fff, transparent 60%),
+    radial-gradient(1.4px 1.4px at 132px 88px, rgba(255, 255, 255, 0.85), transparent 60%),
+    radial-gradient(1.2px 1.2px at 68px 162px, rgba(255, 255, 255, 0.7), transparent 60%),
+    radial-gradient(1.8px 1.8px at 188px 202px, rgba(255, 255, 255, 0.9), transparent 60%);
+  background-size: 240px 240px;
+  animation: bg-stars-scroll 90s linear infinite;
+}
+
+/* Vinil */
+.bg-vinyl {
+  background: radial-gradient(circle at 50% 42%, #161616, #050505 70%);
+}
+.bg-vinyl .bg-blob {
+  display: none;
+}
+.bg-vinyl .bg-shine {
+  inset: auto;
+  top: 52%;
+  left: 62%;
+  width: 86vmax;
+  height: 86vmax;
+  border-radius: 50%;
+  opacity: 0.7;
+  background: repeating-radial-gradient(
+    circle at center,
+    #0a0a0a 0 4px,
+    #1e1e1e 4px 7px
+  );
+  animation: bg-spin 30s linear infinite;
+}
+
+/* Opções */
+.bg-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 14px;
+}
+
+.bg-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 12px;
+  border: 2px solid transparent;
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.bg-card:hover {
+  background: #262626;
+}
+
+.bg-card.is-active {
+  border-color: var(--accent);
+}
+
+.bg-thumb {
+  position: relative;
+  display: block;
+  aspect-ratio: 16 / 10;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #070707;
+}
+
+.bg-thumb .bg-scene {
+  position: absolute;
+  inset: 0;
+}
+
+.bg-scene.is-preview .bg-blob {
+  width: 120%;
+  height: 120%;
+  filter: blur(26px);
+}
+
+.bg-thumb-none {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(160deg, #161616, #080808);
+}
+
+.bg-check {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #04140a;
+}
+
+.bg-card-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 4px 4px;
+}
+
+.bg-card-text strong {
+  font-size: 14px;
+}
+
+.bg-card-text small {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bg-blob,
+  .bg-shine {
+    animation: none !important;
+  }
+}

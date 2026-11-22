@@ -10,9 +10,13 @@ import { Search } from './pages/Search'
 import { Library } from './pages/Library'
 import { Settings } from './pages/Settings'
 import { Profile } from './pages/Profile'
+import { Backgrounds } from './pages/Backgrounds'
+import { BackgroundScene } from './components/BackgroundScene'
+import { useBackground } from './lib/backgrounds'
 import { Collection } from './pages/Collection'
 import { PlayerProvider, usePlayer } from './lib/player'
 import { GENRES, getAlbum, getPlaylist } from './lib/catalog'
+import { cx } from './lib/format'
 import type { View } from './lib/nav'
 
 const tintFor = (view: View): string => {
@@ -101,6 +105,7 @@ function Shell() {
   )
 
   const tint = useMemo(() => tintFor(view), [view])
+  const [background] = useBackground()
 
   const activeQuery = view.type === 'search' && view.query ? view.query : query
 
@@ -111,9 +116,11 @@ function Shell() {
       case 'library':
         return <Library navigate={navigate} />
       case 'settings':
-        return <Settings />
+        return <Settings navigate={navigate} />
       case 'profile':
         return <Profile navigate={navigate} />
+      case 'backgrounds':
+        return <Backgrounds />
       case 'album':
       case 'playlist':
       case 'liked':
@@ -130,9 +137,15 @@ function Shell() {
         <Sidebar view={view} navigate={navigate} />
 
         <main
-          className="main"
-          style={{ background: `linear-gradient(180deg, ${tint} 0%, #121212 420px)` }}
+          className={cx('main', background !== 'none' && 'has-scene')}
+          style={{
+            background:
+              background === 'none'
+                ? `linear-gradient(180deg, ${tint} 0%, #121212 420px)`
+                : `linear-gradient(180deg, ${tint}55 0%, rgba(10, 10, 10, 0.5) 420px)`,
+          }}
         >
+          <BackgroundScene id={background} />
           <div
             className="scroller"
             ref={scrollerRef}

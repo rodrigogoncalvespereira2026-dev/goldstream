@@ -4,6 +4,7 @@ export type View =
   | { type: 'library' }
   | { type: 'settings' }
   | { type: 'profile' }
+  | { type: 'backgrounds' }
   | { type: 'album'; id: string }
   | { type: 'playlist'; id: string }
   | { type: 'liked' }
