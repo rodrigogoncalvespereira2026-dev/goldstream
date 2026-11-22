@@ -117,6 +117,13 @@ export const MoreIcon = ({ size = 24, ...rest }: IconProps) => (
   </svg>
 )
 
+export const RefreshIcon = ({ size = 24, ...rest }: IconProps) => (
+  <svg {...base(size)} {...rest}>
+    <path d="M20.5 12a8.5 8.5 0 1 1-2.9-6.4" />
+    <path d="M20.8 3.4v5.2h-5.2" />
+  </svg>
+)
+
 export const ClockIcon = ({ size = 24, ...rest }: IconProps) => (
   <svg {...base(size)} {...rest}>
     <circle cx="12" cy="12" r="8.6" />

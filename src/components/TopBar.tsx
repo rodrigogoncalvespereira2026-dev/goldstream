@@ -1,6 +1,7 @@
-import { ArrowLeftIcon, ArrowRightIcon, SearchIcon } from './Icons'
+import { ArrowLeftIcon, ArrowRightIcon, RefreshIcon, SearchIcon } from './Icons'
 import type { Navigate } from '../lib/nav'
 import { cx } from '../lib/format'
+import { reloadApp } from '../lib/update'
 
 type TopBarProps = {
   navigate: Navigate
@@ -59,6 +60,16 @@ export function TopBar({
           }}
         />
       </label>
+
+      <button
+        type="button"
+        className="topbar-refresh"
+        onClick={reloadApp}
+        aria-label="Atualizar app"
+        title="Atualizar app"
+      >
+        <RefreshIcon size={20} />
+      </button>
 
       <div className="topbar-right">
         <button

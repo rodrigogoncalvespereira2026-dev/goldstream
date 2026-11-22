@@ -1627,7 +1627,11 @@ img {
   :root {
     --page-x: 14px;
     --player-h: 64px;
-    --mobile-nav-h: calc(64px + env(safe-area-inset-bottom));
+    /* No Android a app desenha por baixo da barra de estado: garantimos sempre
+       um mínimo, mesmo quando o WebView devolve env() a zero. */
+    --safe-top: max(env(safe-area-inset-top, 0px), 26px);
+    --safe-bottom: max(env(safe-area-inset-bottom, 0px), 10px);
+    --mobile-nav-h: calc(64px + var(--safe-bottom));
   }
 
   html,
@@ -1663,9 +1667,14 @@ img {
   }
 
   .topbar {
-    min-height: 62px;
+    min-height: calc(62px + var(--safe-top));
     gap: 10px;
-    padding: 10px var(--page-x);
+    padding: calc(var(--safe-top) + 4px) var(--page-x) 10px;
+  }
+
+  .scroller::-webkit-scrollbar {
+    width: 0;
+    height: 0;
   }
 
   .nav-buttons,
@@ -1700,7 +1709,7 @@ img {
     align-items: start;
     width: 100%;
     height: var(--mobile-nav-h);
-    padding: 6px 4px env(safe-area-inset-bottom);
+    padding: 6px 4px var(--safe-bottom);
     border-top: 1px solid rgba(255, 255, 255, 0.08);
     background: rgba(18, 18, 18, 0.98);
   }
@@ -1743,23 +1752,33 @@ img {
     white-space: nowrap;
   }
 
+  /* Uma coluna: os nomes das playlists não cabiam nos cartões a meias. */
   .quick-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
     gap: 8px;
+    margin-bottom: 26px;
   }
 
   .quick-tile {
-    height: 64px;
+    height: 60px;
+    gap: 12px;
+    padding-right: 14px;
+    background: rgba(255, 255, 255, 0.08);
   }
 
   .quick-tile img,
   .quick-cover {
-    width: 64px;
-    height: 64px;
+    width: 60px;
+    height: 60px;
   }
 
   .quick-tile-name {
-    padding: 0 38px 0 8px;
+    padding: 0;
+    font-size: 14.5px;
+  }
+
+  .quick-play {
+    display: none;
   }
 
   .collection-hero {
@@ -2083,13 +2102,17 @@ img {
   }
 
   .quick-tile {
-    height: 58px;
+    height: 56px;
   }
 
   .quick-tile img,
   .quick-cover {
-    width: 58px;
-    height: 58px;
+    width: 56px;
+    height: 56px;
+  }
+
+  .quick-tile-name {
+    font-size: 14px;
   }
 
   .collection-hero {
@@ -2107,5 +2130,78 @@ img {
 
   .np-art {
     width: min(68vw, 300px);
+  }
+}
+
+/* No telemóvel não existe hover: sem isto o fundo do cartão fica "preso"
+   depois de tocar e o botão de play aparece encravado no sítio errado. */
+@media (hover: none) {
+  .card:hover {
+    background: transparent;
+  }
+
+  .card:hover .card-art img {
+    transform: none;
+  }
+
+  .card-play {
+    display: none;
+  }
+
+  .quick-tile:hover {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .quick-play {
+    display: none;
+  }
+
+  .track-row:hover {
+    background: transparent;
+  }
+
+  .track-row:hover .track-number {
+    display: block;
+  }
+
+  .track-row:hover .track-hover-play {
+    display: none;
+  }
+}
+
+/* ---------- atualizar app ---------- */
+
+.topbar-refresh {
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--muted);
+  transition: background 0.15s ease, color 0.15s ease, transform 0.25s ease;
+}
+
+.topbar-refresh:hover {
+  background: rgba(255, 255, 255, 0.18);
+  color: var(--text);
+}
+
+.topbar-refresh:active {
+  transform: rotate(180deg);
+}
+
+.settings-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+@media (max-width: 760px) {
+  .topbar-refresh {
+    width: 40px;
+    height: 40px;
   }
 }
