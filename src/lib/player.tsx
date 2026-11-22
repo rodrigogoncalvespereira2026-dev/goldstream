@@ -128,6 +128,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const nativeQueuedRef = useRef<Set<string>>(new Set())
   /** Muda sempre que a fila nativa é reconstruída (cancela abastecimentos antigos). */
   const queueGenerationRef = useRef(0)
+  /** Duração que o motor nativo reporta para a faixa atual (para limitar o arrasto). */
+  const nativeDurationRef = useRef(0)
+  /** Quando o utilizador arrastou a barra pela última vez. */
+  const seekedAtRef = useRef(0)
   /** Faixa que a própria fila nativa começou (não precisa de ser tocada outra vez). */
   const nativeAdvancedRef = useRef<string | null>(null)
   const addRecentRef = useRef<(id: string) => void>(() => {})
@@ -167,7 +171,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const ytAudioPending = Boolean(
     isYouTube && current && !ytAudioSrc && !ytAudioFailed[current.id],
   )
-  const usesIframe = Boolean(isYouTube && !ytAudioSrc && !ytAudioPending)
+  // O iframe do YouTube só existe fora do nativo: no telemóvel o som sai sempre do
+  // ExoPlayer (ou mostra um aviso). Sem isto, uma faixa que falhasse a resolução
+  // limpava a fila nativa e calava a música.
+  const usesIframe = Boolean(
+    !nativePlatform && isYouTube && !ytAudioSrc && !ytAudioPending,
+  )
 
   const stateRef = useRef({ order, pos, repeat })
   stateRef.current = { order, pos, repeat }
@@ -337,15 +346,29 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       })
       const completeListener = await NativeAudio.addListener('complete', (event) => {
         if (disposed) return
-        // O plugin só emite "complete" quando NÃO conseguiu passar à faixa
-        // seguinte (fim da fila). Antes ficávamos à espera de um avanço que
-        // nunca vinha — a música travava. Agora a app assume a próxima.
-        const same = stateRef.current.repeat === 'one' && event.assetId
-        if (same) {
-          void NativeAudio.play({ assetId: event.assetId, time: 0 }).catch(() => {})
+        const assetId = event.assetId
+        // Aviso de uma faixa que já não é a atual: não mexer na reprodução.
+        if (assetId && nativeLoadedRef.current && assetId !== nativeLoadedRef.current) return
+
+        // Repetir a mesma faixa: voltar a tocar do início.
+        if (assetId && stateRef.current.repeat === 'one') {
+          void NativeAudio.play({ assetId, time: 0 }).catch(() => {})
           setCurrentTime(0)
           return
         }
+
+        // A faixa "acabou" logo a seguir a um arrasto: o arrasto passou do fim.
+        // Volta a tocar a mesma em vez de saltar para outra música.
+        if (assetId && Date.now() - seekedAtRef.current < 1500) {
+          seekedAtRef.current = 0
+          void NativeAudio.play({ assetId, time: 0 }).catch(() => {})
+          setCurrentTime(0)
+          return
+        }
+
+        // O plugin só emite "complete" quando NÃO conseguiu passar à faixa
+        // seguinte (fim da fila). Antes ficávamos à espera de um avanço que
+        // nunca vinha — a música travava. Agora a app assume a próxima.
         nativeQueueActiveRef.current = false
         nativeQueuedRef.current = new Set()
         queueGenerationRef.current += 1
@@ -376,7 +399,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       const stateListener = await NativeAudio.addListener('playbackState', (event) => {
         if (disposed || usesIframeRef.current) return
         if (typeof event.currentTime === 'number') setCurrentTime(event.currentTime)
-        if (typeof event.duration === 'number' && event.duration > 0) setDuration(event.duration)
+        if (typeof event.duration === 'number' && event.duration > 0) {
+          nativeDurationRef.current = event.duration
+          setDuration(event.duration)
+        }
         // Só aceitar o estado do motor quando concorda com o pedido do utilizador ou
         // quando vem do aviso/casaco (remotePlay/remotePause). Isso evita que um
         // "playing" atrasado volte a arrancar a música depois de carregar em pausa.
@@ -581,6 +607,15 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       }
     })()
   }, [current, order, nativePlatform, usesIframe, queueNonce])
+
+  // Trocar de faixa no nativo: o tempo e a duração da anterior não podem ficar na
+  // barra (um arrasto com a duração errada saltava para outra música).
+  useEffect(() => {
+    nativeDurationRef.current = 0
+    if (!nativePlatform || !currentId) return
+    setCurrentTime(0)
+    setDuration(currentRef.current?.duration ?? 0)
+  }, [currentId, nativePlatform])
 
   // Repetir também é do motor nativo (uma faixa, a lista toda, ou nada).
   useEffect(() => {
@@ -907,9 +942,15 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   const seek = useCallback((seconds: number) => {
     if (!usesIframeRef.current && Capacitor.isNativePlatform()) {
-      setCurrentTime(seconds)
+      // Nunca deixar o arrasto chegar ao fim da faixa: era isso que fazia o
+      // ExoPlayer concluir e saltar para a seguinte sem o utilizador pedir.
+      const limit = nativeDurationRef.current
+      const target =
+        limit > 1 ? Math.min(Math.max(0, seconds), limit - 0.6) : Math.max(0, seconds)
+      seekedAtRef.current = Date.now()
+      setCurrentTime(target)
       const assetId = nativeLoadedRef.current
-      if (assetId) void NativeAudio.setCurrentTime({ assetId, time: seconds }).catch(() => {})
+      if (assetId) void NativeAudio.setCurrentTime({ assetId, time: target }).catch(() => {})
       return
     }
     if (usesIframeRef.current) {
@@ -923,7 +964,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     }
     const audio = audioRef.current
     if (!audio) return
-    const target = Math.min(Math.max(0, seconds), audio.duration || seconds)
+    const end =
+      Number.isFinite(audio.duration) && audio.duration > 1 ? audio.duration - 0.3 : seconds
+    const target = Math.min(Math.max(0, seconds), end)
     audio.currentTime = target
     setCurrentTime(target)
   }, [])
