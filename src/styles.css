@@ -2246,3 +2246,9 @@ img {
 .ghost-button:hover {
   background: rgba(255, 255, 255, 0.18);
 }
+
+.settings-note-update {
+  margin: 12px 0 0;
+  color: var(--accent);
+  font-weight: 600;
+}
