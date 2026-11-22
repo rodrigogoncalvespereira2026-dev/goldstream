@@ -5,6 +5,8 @@ export type View =
   | { type: 'settings' }
   | { type: 'profile' }
   | { type: 'backgrounds' }
+  | { type: 'colors' }
+  | { type: 'mine'; id: string }
   | { type: 'album'; id: string }
   | { type: 'playlist'; id: string }
   | { type: 'liked' }

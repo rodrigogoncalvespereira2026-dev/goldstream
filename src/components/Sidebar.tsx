@@ -7,10 +7,12 @@ import {
   HomeIcon,
   LibraryIcon,
   LogoMark,
+  MusicNoteIcon,
   SearchIcon,
   SettingsIcon,
   UserIcon,
 } from './Icons'
+import { useUserPlaylists } from '../lib/userPlaylists'
 
 type SidebarProps = {
   view: View
@@ -19,6 +21,7 @@ type SidebarProps = {
 
 export function Sidebar({ view, navigate }: SidebarProps) {
   const { liked } = usePlayer()
+  const playlists = useUserPlaylists()
 
   return (
     <aside className="sidebar">
@@ -94,6 +97,28 @@ export function Sidebar({ view, navigate }: SidebarProps) {
               <span>Playlist · {plural(liked.length, 'música', 'músicas')}</span>
             </span>
           </button>
+
+          {playlists.map((playlist) => (
+            <button
+              key={playlist.id}
+              type="button"
+              className={cx(
+                'sidebar-item',
+                view.type === 'mine' && view.id === playlist.id && 'is-active',
+              )}
+              onClick={() => navigate({ type: 'mine', id: playlist.id })}
+            >
+              <span className="sidebar-thumb mine-thumb">
+                <MusicNoteIcon size={15} />
+              </span>
+              <span className="sidebar-item-text">
+                <strong>{playlist.name}</strong>
+                <span>
+                  Playlist · {plural(playlist.trackIds.length, 'música', 'músicas')}
+                </span>
+              </span>
+            </button>
+          ))}
 
           {PLAYLISTS.map((playlist) => (
             <button

@@ -11,8 +11,11 @@ import { Library } from './pages/Library'
 import { Settings } from './pages/Settings'
 import { Profile } from './pages/Profile'
 import { Backgrounds } from './pages/Backgrounds'
+import { Colors } from './pages/Colors'
+import { MyPlaylist } from './pages/MyPlaylist'
 import { BackgroundScene } from './components/BackgroundScene'
 import { useBackground } from './lib/backgrounds'
+import { applyAccent, useAccent } from './lib/theme'
 import { Collection } from './pages/Collection'
 import { Auth } from './pages/Auth'
 import { saveAccountData, useAccount } from './lib/account'
@@ -108,6 +111,11 @@ function Shell() {
 
   const tint = useMemo(() => tintFor(view), [view])
   const [background] = useBackground()
+  const [accent] = useAccent()
+
+  useEffect(() => {
+    applyAccent(accent)
+  }, [accent])
 
   const activeQuery = view.type === 'search' && view.query ? view.query : query
 
@@ -123,6 +131,10 @@ function Shell() {
         return <Profile navigate={navigate} />
       case 'backgrounds':
         return <Backgrounds />
+      case 'colors':
+        return <Colors />
+      case 'mine':
+        return <MyPlaylist id={view.id} navigate={navigate} />
       case 'album':
       case 'playlist':
       case 'liked':

@@ -86,6 +86,13 @@ export function Settings({ navigate }: { navigate: Navigate }) {
             <SparkleIcon size={18} />
             Fundos da tela
           </button>
+          <button
+            type="button"
+            className="ghost-button settings-action"
+            onClick={() => navigate({ type: 'colors' })}
+          >
+            Cores do tema
+          </button>
           {currentBackground && (
             <span className="settings-note settings-note-tech">
               Fundo atual: {currentBackground.name}

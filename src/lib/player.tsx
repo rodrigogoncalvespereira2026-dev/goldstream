@@ -29,6 +29,12 @@ type PlayerValue = {
   repeat: RepeatMode
   liked: string[]
   recent: string[]
+  /** Fila atual, pela ordem em que vai tocar. */
+  queue: string[]
+  /** Índice da faixa em curso dentro da fila. */
+  queueIndex: number
+  jumpTo: (id: string) => void
+  removeFromQueue: (id: string) => void
   playQueue: (ids: string[], startId?: string) => void
   playTrack: (id: string) => void
   toggle: () => void
@@ -1000,6 +1006,38 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   const next = useCallback(() => step(1), [step])
 
+  /** Salta para uma faixa da fila (tocar já). */
+  const jumpTo = useCallback(
+    (id: string) => {
+      const index = stateRef.current.order.indexOf(id)
+      if (index < 0) return
+      setPos(index)
+      setIntent(true)
+      addRecent(id)
+    },
+    [setIntent, addRecent],
+  )
+
+  /** Tira uma faixa da fila, acertando a faixa em curso. */
+  const removeFromQueue = useCallback(
+    (id: string) => {
+      const { order: list, pos: index } = stateRef.current
+      const at = list.indexOf(id)
+      if (at < 0) return
+      const nextOrder = list.filter((item) => item !== id)
+      setOrder(nextOrder)
+      if (!nextOrder.length) {
+        setPos(-1)
+        setIntent(false)
+        applyPlaybackNow(false)
+        return
+      }
+      if (at < index) setPos(index - 1)
+      else if (at === index) setPos(Math.min(index, nextOrder.length - 1))
+    },
+    [setIntent, applyPlaybackNow],
+  )
+
   const seek = useCallback((seconds: number) => {
     if (!usesIframeRef.current && Capacitor.isNativePlatform()) {
       // Nunca deixar o arrasto chegar ao fim da faixa: era isso que fazia o
@@ -1178,6 +1216,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       repeat,
       liked,
       recent,
+      queue: order,
+      queueIndex: pos,
+      jumpTo,
+      removeFromQueue,
       playQueue,
       playTrack,
       toggle,
@@ -1205,6 +1247,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       repeat,
       liked,
       recent,
+      order,
+      pos,
+      jumpTo,
+      removeFromQueue,
       playQueue,
       playTrack,
       toggle,

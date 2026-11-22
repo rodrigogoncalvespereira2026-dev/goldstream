@@ -1,9 +1,10 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { Album, Playlist, Track } from '../lib/catalog'
 import { cx, formatTime, plural } from '../lib/format'
 import { usePlayer } from '../lib/player'
-import { HeartIcon, PauseIcon, PlayIcon, VideoIcon } from './Icons'
+import { HeartIcon, PauseIcon, PlayIcon, PlusIcon, VideoIcon } from './Icons'
 import { CoverImage } from './CoverImage'
+import { PlaylistSheet } from './PlaylistSheet'
 
 type MediaCardProps = {
   title: string
@@ -97,10 +98,20 @@ type TrackRowProps = {
   onPlay: () => void
   showCover?: boolean
   showAlbum?: boolean
+  /** Quando existe, mostra o botão de tirar (ex.: dentro de uma playlist). */
+  onRemove?: () => void
 }
 
-export function TrackRow({ track, index, onPlay, showCover, showAlbum = true }: TrackRowProps) {
+export function TrackRow({
+  track,
+  index,
+  onPlay,
+  showCover,
+  showAlbum = true,
+  onRemove,
+}: TrackRowProps) {
   const { current, isPlaying, toggleLike, isLiked, durations, openWatch } = usePlayer()
+  const [sheetOpen, setSheetOpen] = useState(false)
   const active = current?.id === track.id
   const liked = isLiked(track.id)
   const length = durations[track.id] ?? track.duration
@@ -157,6 +168,30 @@ export function TrackRow({ track, index, onPlay, showCover, showAlbum = true }: 
       </button>
 
       <div className="track-duration">
+        <button
+          type="button"
+          className="track-add"
+          aria-label={`Adicionar ${track.title} a uma playlist`}
+          onClick={(event) => {
+            event.stopPropagation()
+            setSheetOpen(true)
+          }}
+        >
+          <PlusIcon size={15} />
+        </button>
+        {onRemove && (
+          <button
+            type="button"
+            className="track-remove"
+            aria-label={`Tirar ${track.title} da playlist`}
+            onClick={(event) => {
+              event.stopPropagation()
+              onRemove()
+            }}
+          >
+            <span aria-hidden="true">×</span>
+          </button>
+        )}
         {track.provider === 'youtube' && track.videoId && (
           <button
             type="button"
@@ -172,6 +207,10 @@ export function TrackRow({ track, index, onPlay, showCover, showAlbum = true }: 
         )}
         <span>{length ? formatTime(length) : '–:––'}</span>
       </div>
+
+      {sheetOpen && (
+        <PlaylistSheet trackId={track.id} onClose={() => setSheetOpen(false)} />
+      )}
     </div>
   )
 }

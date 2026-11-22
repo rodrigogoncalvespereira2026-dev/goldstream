@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ALBUMS, GENRES, searchCatalog, type Track } from '../lib/catalog'
+import { ALBUMS, GENRES, getTrack, searchCatalog, type Track } from '../lib/catalog'
 import { searchFullSongs } from '../lib/audius'
 import { rankByRelevance, searchYouTubeSongs, YOUTUBE_API_KEY } from '../lib/youtube'
 import { AlbumCard, MediaCard, Section, TrackRow } from '../components/Cards'
 import { usePlayer } from '../lib/player'
+import { useSearchHistory } from '../lib/searchHistory'
 import type { Navigate } from '../lib/nav'
 
 type SearchState = {
@@ -56,7 +57,17 @@ function TrackResults({
 }
 
 export function Search({ query, navigate }: { query: string; navigate: Navigate }) {
-  const { current, isPlaying, playQueue } = usePlayer()
+  const { current, isPlaying, playQueue, recent } = usePlayer()
+  const [history, rememberSearch, clearHistory] = useSearchHistory()
+
+  const suggestions = useMemo(() => {
+    const artists: string[] = []
+    recent.forEach((id) => {
+      const track = getTrack(id)
+      if (track && !artists.includes(track.artist)) artists.push(track.artist)
+    })
+    return artists.slice(0, 8)
+  }, [recent])
   const youTubeKey = YOUTUBE_API_KEY
   const trimmed = query.trim()
   const local = useMemo(() => searchCatalog(query), [query])
@@ -87,6 +98,7 @@ export function Search({ query, navigate }: { query: string; navigate: Navigate 
     }
 
     const timer = window.setTimeout(() => {
+      rememberSearch(trimmed)
       settle(
         searchFullSongs(trimmed, controller.signal).then((tracks) => rankByRelevance(trimmed, tracks)),
         setFull,
@@ -104,6 +116,41 @@ export function Search({ query, navigate }: { query: string; navigate: Navigate 
     return (
       <div>
         <h1 className="page-title">Buscar</h1>
+
+        {history.length > 0 && (
+          <Section title="Pesquisas recentes" action="Limpar" onAction={clearHistory}>
+            <div className="chips">
+              {history.map((term) => (
+                <button
+                  key={term}
+                  type="button"
+                  className="chip"
+                  onClick={() => navigate({ type: 'search', query: term })}
+                >
+                  {term}
+                </button>
+              ))}
+            </div>
+          </Section>
+        )}
+
+        {suggestions.length > 0 && (
+          <Section title="Sugestões" note="A partir do que ouviste">
+            <div className="chips">
+              {suggestions.map((artist) => (
+                <button
+                  key={artist}
+                  type="button"
+                  className="chip"
+                  onClick={() => navigate({ type: 'search', query: artist })}
+                >
+                  {artist}
+                </button>
+              ))}
+            </div>
+          </Section>
+        )}
+
         <div className="genre-grid">
           {GENRES.map((genre) => (
             <button

@@ -1,16 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
 import type { TouchEvent as ReactTouchEvent } from 'react'
-import { getAlbum } from '../lib/catalog'
+import { getAlbum, getTrack } from '../lib/catalog'
 import { cx, formatTime } from '../lib/format'
 import { usePlayer, usePlayerTime } from '../lib/player'
 import { CoverImage } from './CoverImage'
 import { Slider } from './Slider'
 import { RadioButton } from './RadioButton'
+import { PlaylistSheet } from './PlaylistSheet'
 import {
   ChevronDownIcon,
   HeartIcon,
   NextIcon,
   PauseIcon,
+  PlusIcon,
+  QueueIcon,
   PlayIcon,
   PrevIcon,
   RepeatIcon,
@@ -39,6 +42,10 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
     isLiked,
     toggleLike,
     openWatch,
+    queue,
+    queueIndex,
+    jumpTo,
+    removeFromQueue,
   } = usePlayer()
   const { currentTime, duration, seek } = usePlayerTime()
 
@@ -48,6 +55,7 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
   const [dragY, setDragY] = useState(0)
   const [dragging, setDragging] = useState(false)
   const [closing, setClosing] = useState(false)
+  const [sheetOpen, setSheetOpen] = useState(false)
 
   const resetDrag = () => {
     setDragging(false)
@@ -137,6 +145,14 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
               </div>
               <button
                 type="button"
+                className="np-like"
+                onClick={() => setSheetOpen(true)}
+                aria-label="Adicionar a uma playlist"
+              >
+                <PlusIcon size={24} />
+              </button>
+              <button
+                type="button"
                 className={cx('np-like', liked && 'is-liked')}
                 onClick={() => toggleLike(current.id)}
                 aria-label={liked ? 'Remover das músicas curtidas' : 'Curtir música'}
@@ -210,9 +226,51 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
               </button>
             </div>
 
+            {queue.length > 1 && (
+              <section className="np-queue">
+                <h3 className="np-queue-title">
+                  <QueueIcon size={16} /> A seguir · {queue.length - queueIndex - 1} na fila
+                </h3>
+                <ul className="np-queue-list">
+                  {queue.map((id, index) => {
+                    const track = getTrack(id)
+                    if (!track) return null
+                    const active = index === queueIndex
+                    return (
+                      <li key={`${id}-${index}`} className={cx('np-queue-row', active && 'is-current')}>
+                        <button
+                          type="button"
+                          className="np-queue-play"
+                          onClick={() => jumpTo(id)}
+                          aria-label={`Tocar ${track.title}`}
+                        >
+                          <CoverImage className="np-queue-art" src={track.cover} />
+                          <span className="np-queue-text">
+                            <strong>{track.title}</strong>
+                            <span>{track.artist}</span>
+                          </span>
+                          {active && <span className="np-queue-now">A tocar</span>}
+                        </button>
+                        <button
+                          type="button"
+                          className="np-queue-remove"
+                          onClick={() => removeFromQueue(id)}
+                          aria-label={`Tirar ${track.title} da fila`}
+                        >
+                          ×
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </section>
+            )}
+
             <p className="np-source">
               {current.provider === 'youtube' ? 'A tocar no YouTube' : 'A tocar na goldenstream'}
             </p>
+
+            {sheetOpen && <PlaylistSheet trackId={current.id} onClose={() => setSheetOpen(false)} />}
           </>
         ) : (
           <div className="np-empty">

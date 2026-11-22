@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ALBUMS, PLAYLISTS } from '../lib/catalog'
-import { HeartIcon, PlayIcon } from '../components/Icons'
+import { HeartIcon, MusicNoteIcon, PlayIcon, PlusIcon } from '../components/Icons'
+import { createPlaylist, useUserPlaylists } from '../lib/userPlaylists'
 import { cx, plural } from '../lib/format'
 import { usePlayer } from '../lib/player'
 import type { Navigate } from '../lib/nav'
@@ -9,7 +10,9 @@ type Filter = 'all' | 'playlists' | 'albums'
 
 export function Library({ navigate }: { navigate: Navigate }) {
   const { liked, playQueue } = usePlayer()
+  const mine = useUserPlaylists()
   const [filter, setFilter] = useState<Filter>('all')
+  const [newName, setNewName] = useState('')
 
   const showPlaylists = filter !== 'albums'
   const showAlbums = filter !== 'playlists'
@@ -43,6 +46,28 @@ export function Library({ navigate }: { navigate: Navigate }) {
           <div className="section-head">
             <h2>Playlists</h2>
           </div>
+          <form
+            className="library-create"
+            onSubmit={(event) => {
+              event.preventDefault()
+              if (!newName.trim()) return
+              const created = createPlaylist(newName)
+              setNewName('')
+              navigate({ type: 'mine', id: created.id })
+            }}
+          >
+            <input
+              value={newName}
+              onChange={(event) => setNewName(event.target.value)}
+              placeholder="Nome da nova playlist"
+              aria-label="Nome da nova playlist"
+              maxLength={40}
+            />
+            <button type="submit" className="ghost-button">
+              <PlusIcon size={15} /> Criar playlist
+            </button>
+          </form>
+
           <div className="library-rows">
             <div
               className="library-row"
@@ -74,6 +99,42 @@ export function Library({ navigate }: { navigate: Navigate }) {
                 <PlayIcon size={20} />
               </button>
             </div>
+
+            {mine.map((playlist) => (
+              <div
+                key={playlist.id}
+                className="library-row"
+                role="button"
+                tabIndex={0}
+                onClick={() => navigate({ type: 'mine', id: playlist.id })}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') navigate({ type: 'mine', id: playlist.id })
+                }}
+              >
+                <span className="library-row-thumb mine-thumb-lg">
+                  <MusicNoteIcon size={20} />
+                </span>
+                <span className="library-row-text">
+                  <span className="library-row-title">{playlist.name}</span>
+                  <span className="library-row-meta">
+                    A tua playlist · {plural(playlist.trackIds.length, 'música', 'músicas')}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  className="library-row-play"
+                  aria-label={`Tocar ${playlist.name}`}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    if (playlist.trackIds.length) {
+                      playQueue(playlist.trackIds, playlist.trackIds[0])
+                    }
+                  }}
+                >
+                  <PlayIcon size={20} />
+                </button>
+              </div>
+            ))}
 
             {PLAYLISTS.map((playlist) => (
               <div
