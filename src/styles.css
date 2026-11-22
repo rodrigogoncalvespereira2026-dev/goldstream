@@ -2252,3 +2252,9 @@ img {
   color: var(--accent);
   font-weight: 600;
 }
+
+.settings-note-tech {
+  margin: 0;
+  font-size: 12px;
+  opacity: 0.75;
+}

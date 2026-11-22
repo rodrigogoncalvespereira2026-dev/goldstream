@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Capacitor } from '@capacitor/core'
 import { Section } from '../components/Cards'
 import { DownloadIcon, RefreshIcon } from '../components/Icons'
 import { YouTubeLink } from '../components/YouTubeLink'
@@ -56,6 +57,10 @@ export function Settings() {
         <p className="settings-note">
           O goldenstream é uma demonstração de player de música. As faixas do catálogo são gravações
           livres do SoundHelix; as buscas usam Audius e YouTube.
+        </p>
+        <p className="settings-note settings-note-tech">
+          Motor de áudio: {Capacitor.isPluginAvailable('NativeAudio') ? 'nativo' : 'navegador'} ·
+          Atualizador: {Capacitor.isPluginAvailable('AppUpdate') ? 'nativo' : 'indisponível'}
         </p>
       </Section>
     </div>
