@@ -88,7 +88,7 @@ export function Search({ query, navigate }: { query: string; navigate: Navigate 
 
     const timer = window.setTimeout(() => {
       settle(searchFullSongs(trimmed, controller.signal), setFull)
-      settle(searchYouTubeSongs(trimmed, youTubeKey, controller.signal), setYouTube)
+      settle(searchYouTubeSongs(trimmed, youTubeKey, controller.signal, 30), setYouTube)
     }, 350)
 
     return () => {

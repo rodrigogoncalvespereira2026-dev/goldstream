@@ -300,7 +300,7 @@ type PipedSearchItem = {
 }
 
 /** Instâncias públicas do Piped: respondem com CORS liberado e não pedem chave. */
-const PIPED_HOSTS = ['api.piped.private.coffee', 'pipedapi.ducks.party']
+const PIPED_HOSTS = ['api.piped.private.coffee', 'pipedapi.ducks.party', 'pipedapi.adminforge.de']
 const WATCH_ID = /[?&]v=([a-zA-Z0-9_-]{11})/
 
 /* ---------------- áudio direto (para tocar em segundo plano) ---------------- */
@@ -366,8 +366,10 @@ const trackFromPiped = (item: PipedSearchItem): Track | null => {
   if (item.type && item.type !== 'stream') return null
   const videoId = WATCH_ID.exec(item.url ?? '')?.[1]
   if (!videoId) return null
-  const seconds = Number(item.duration ?? 0)
-  if (!Number.isFinite(seconds) || seconds < 45) return null
+  const raw = Number(item.duration ?? 0)
+  const seconds = Number.isFinite(raw) && raw > 0 ? raw : 0
+  // Só descarta clipes muito curtos; duração desconhecida não é motivo para esconder.
+  if (seconds > 0 && seconds < 20) return null
   if (!(item.title ?? '').trim()) return null
   const uploader = decodeEntity(item.uploaderName ?? 'YouTube').trim() || 'YouTube'
   const song = songFields(item.title ?? '', uploader)
@@ -390,19 +392,50 @@ const trackFromPiped = (item: PipedSearchItem): Track | null => {
   }
 }
 
-async function searchYouTubeWithoutKey(query: string, signal?: AbortSignal): Promise<Track[]> {
+/** Uma pesquisa do Piped com um filtro (música, vídeo, tudo). */
+async function pipedSearch(
+  host: string,
+  query: string,
+  filter: string,
+  signal?: AbortSignal,
+): Promise<Track[]> {
+  const params = new URLSearchParams({ q: query, filter })
+  const response = await fetch(`https://${host}/search?${params.toString()}`, { signal })
+  if (!response.ok) throw new Error(`A busca pública respondeu ${response.status}.`)
+  const payload = (await response.json()) as { items?: PipedSearchItem[] }
+  return (payload.items ?? []).map(trackFromPiped).filter((track): track is Track => Boolean(track))
+}
+
+/**
+ * Junta vários filtros (músicas, vídeos e tudo) para não esconder resultados que o YouTube
+ * não classifica como "música" — era a razão de faltar tanta coisa na busca.
+ */
+async function searchYouTubeWithoutKey(
+  query: string,
+  limit: number,
+  signal?: AbortSignal,
+): Promise<Track[]> {
   let lastError: unknown = null
 
   for (const host of PIPED_HOSTS) {
     try {
-      const params = new URLSearchParams({ q: query, filter: 'music_songs' })
-      const response = await fetch(`https://${host}/search?${params.toString()}`, { signal })
-      if (!response.ok) throw new Error(`A busca pública respondeu ${response.status}.`)
-      const payload = (await response.json()) as { items?: PipedSearchItem[] }
-      const tracks = (payload.items ?? [])
-        .map(trackFromPiped)
-        .filter((track): track is Track => Boolean(track))
-      if (tracks.length) return tracks
+      const batches = await Promise.all(
+        ['music_songs', 'videos', 'all'].map((filter) =>
+          pipedSearch(host, query, filter, signal).catch(() => [] as Track[]),
+        ),
+      )
+
+      const seen = new Set<string>()
+      const merged: Track[] = []
+      for (const batch of batches) {
+        for (const track of batch) {
+          if (seen.has(track.id)) continue
+          seen.add(track.id)
+          merged.push(track)
+        }
+      }
+
+      if (merged.length) return merged.slice(0, limit)
       lastError = new Error('A busca pública não devolveu faixas.')
     } catch (error) {
       if (signal?.aborted) throw error
@@ -421,7 +454,7 @@ export async function searchYouTubeSongs(
   term: string,
   apiKey: string,
   signal?: AbortSignal,
-  limit = 20,
+  limit = 30,
 ): Promise<Track[]> {
   const query = term.trim()
   if (query.length < 2) return []
@@ -430,12 +463,25 @@ export async function searchYouTubeSongs(
   const cached = keylessCache.get(cacheKey)
   if (cached) return cached
 
-  let tracks: Track[]
+  let tracks: Track[] = []
   try {
-    tracks = await searchYouTubeWithoutKey(query, signal)
+    tracks = await searchYouTubeWithoutKey(query, limit, signal)
   } catch (error) {
     if (signal?.aborted) throw error
     tracks = await searchYouTube(query, apiKey, signal, limit)
+  }
+
+  // Se a busca pública veio pobre, completa com a API oficial (sem filtro de categoria).
+  if (tracks.length < 8 && apiKey) {
+    try {
+      const extra = await searchYouTube(query, apiKey, signal, limit)
+      const seen = new Set(tracks.map((track) => track.id))
+      for (const track of extra) {
+        if (!seen.has(track.id)) tracks.push(track)
+      }
+    } catch {
+      /* fica com o que já veio */
+    }
   }
 
   const result = tracks.slice(0, limit)
@@ -459,10 +505,10 @@ export async function searchYouTube(
   const cached = cache.get(cacheKey)
   if (cached) return cached
 
+  // Sem videoCategoryId: muita música está fora da categoria 10 e o filtro escondia-a.
   const searchParams = new URLSearchParams({
     part: 'snippet',
     type: 'video',
-    videoCategoryId: '10',
     maxResults: String(limit),
     q: query,
     key: apiKey,
@@ -493,11 +539,10 @@ export async function searchYouTube(
     const detail = details.get(candidate.id.videoId)
     const snippet = detail?.snippet ?? candidate.snippet
     if (!snippet?.title) continue
-    // Clipes oficiais costumam bloquear incorporação: não adianta listar o que não toca.
-    if (detail?.status && detail.status.embeddable !== true) continue
+    // O áudio é extraído no telemóvel, por isso vídeos sem incorporação também tocam.
     if (detail?.status?.privacyStatus && detail.status.privacyStatus !== 'public') continue
     const seconds = parseIsoDuration(detail?.contentDetails?.duration)
-    if (seconds && seconds < 45) continue
+    if (seconds && seconds < 20) continue
 
     const channel = decodeEntity(snippet.channelTitle ?? 'YouTube')
     const song = songFields(snippet.title, channel)
