@@ -1,4 +1,5 @@
-import { useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import type { TouchEvent as ReactTouchEvent } from 'react'
 import { getAlbum } from '../lib/catalog'
 import { cx, formatTime } from '../lib/format'
 import { usePlayer, usePlayerTime } from '../lib/player'
@@ -38,6 +39,48 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
   } = usePlayer()
   const { currentTime, duration, seek } = usePlayerTime()
 
+  // Deslizar: puxar para baixo fecha o ecrã, como no Spotify.
+  const sheetRef = useRef<HTMLDivElement>(null)
+  const dragStart = useRef<number | null>(null)
+  const [dragY, setDragY] = useState(0)
+  const [dragging, setDragging] = useState(false)
+  const [closing, setClosing] = useState(false)
+
+  const resetDrag = () => {
+    setDragging(false)
+    setDragY(0)
+  }
+
+  const handleTouchStart = (event: ReactTouchEvent) => {
+    if (event.touches.length !== 1) return
+    if ((sheetRef.current?.scrollTop ?? 0) > 0) return
+    dragStart.current = event.touches[0].clientY
+    setDragging(true)
+  }
+
+  const handleTouchMove = (event: ReactTouchEvent) => {
+    if (dragStart.current === null) return
+    const delta = event.touches[0].clientY - dragStart.current
+    // Para baixo acompanha o dedo; para cima oferece resistência.
+    setDragY(delta > 0 ? delta : delta * 0.25)
+  }
+
+  const handleTouchEnd = () => {
+    if (dragStart.current === null) return
+    dragStart.current = null
+    if (dragY > 110) {
+      setDragging(false)
+      setClosing(true)
+      window.setTimeout(() => {
+        setClosing(false)
+        setDragY(0)
+        onClose()
+      }, 200)
+      return
+    }
+    resetDrag()
+  }
+
   useEffect(() => {
     if (!open) return
     const onKeyDown = (event: KeyboardEvent) => {
@@ -54,11 +97,20 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
 
   return (
     <div
-      className="now-playing"
+      ref={sheetRef}
+      className={cx('now-playing', dragging && 'is-dragging')}
       role="dialog"
       aria-modal="true"
       aria-label="Agora tocando"
-      style={{ background: `linear-gradient(180deg, ${tint} 0%, #0a0a0a 62%)` }}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={resetDrag}
+      style={{
+        background: `linear-gradient(180deg, ${tint} 0%, #0a0a0a 62%)`,
+        transform: closing ? 'translateY(100%)' : `translateY(${Math.max(0, dragY)}px)`,
+        transition: dragging ? 'none' : 'transform 0.22s ease',
+      }}
     >
       <div className="np-inner">
         <div className="np-top">

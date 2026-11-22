@@ -2205,3 +2205,14 @@ img {
     height: 40px;
   }
 }
+
+/* Deslizar o ecrã "Agora tocando" para baixo para fechar */
+.now-playing {
+  overscroll-behavior: contain;
+  will-change: transform;
+}
+
+.now-playing.is-dragging {
+  user-select: none;
+  transition: none;
+}

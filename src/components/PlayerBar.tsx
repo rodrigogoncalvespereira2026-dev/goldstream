@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import type { TouchEvent as ReactTouchEvent } from 'react'
 import { formatTime } from '../lib/format'
 import { usePlayer, usePlayerTime } from '../lib/player'
 import { useMediaQuery } from '../lib/useMediaQuery'
@@ -40,13 +41,33 @@ export function PlayerBar() {
   const isMobile = useMediaQuery('(max-width: 760px)')
   const [expanded, setExpanded] = useState(false)
 
+  // Deslizar a barra para cima abre o ecrã "Agora tocando".
+  const touchStartY = useRef<number | null>(null)
+
+  const handleBarTouchStart = (event: ReactTouchEvent) => {
+    if (!isMobile) return
+    touchStartY.current = event.touches[0]?.clientY ?? null
+  }
+
+  const handleBarTouchEnd = (event: ReactTouchEvent) => {
+    if (!isMobile || touchStartY.current === null) return
+    const endY = event.changedTouches[0]?.clientY ?? touchStartY.current
+    const delta = endY - touchStartY.current
+    touchStartY.current = null
+    if (delta < -36) setExpanded(true)
+  }
+
   const liked = current ? isLiked(current.id) : false
   const effectiveVolume = muted ? 0 : volume
   const progress = duration ? Math.min(100, (currentTime / duration) * 100) : 0
 
   return (
     <>
-      <footer className={cx('player', isMobile && 'is-mobile')}>
+      <footer
+        className={cx('player', isMobile && 'is-mobile')}
+        onTouchStart={handleBarTouchStart}
+        onTouchEnd={handleBarTouchEnd}
+      >
         <div className="player-mini-progress" aria-hidden="true">
           <span style={{ width: `${progress}%` }} />
         </div>
