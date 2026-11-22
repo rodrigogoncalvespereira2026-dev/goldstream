@@ -2505,33 +2505,6 @@ img {
 
 /* ---------------- Perfil ---------------- */
 
-.home-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.home-avatar {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 14px 4px 4px;
-  border: 0;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--text);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.home-avatar .avatar {
-  width: 30px;
-  height: 30px;
-}
-
 .profile-head {
   display: flex;
   align-items: center;

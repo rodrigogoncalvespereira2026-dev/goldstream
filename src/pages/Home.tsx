@@ -4,8 +4,6 @@ import { CoverImage } from '../components/CoverImage'
 import { HeartIcon, PlayIcon } from '../components/Icons'
 import { greeting } from '../lib/format'
 import { usePlayer } from '../lib/player'
-import { useProfile } from '../lib/profile'
-import { Avatar } from '../components/Avatar'
 import type { Navigate } from '../lib/nav'
 
 /** Cartões de descoberta: cada um abre a busca já com o tema escolhido. */
@@ -22,7 +20,6 @@ const THEMES = [
 
 export function Home({ navigate }: { navigate: Navigate }) {
   const { recent, liked, playQueue } = usePlayer()
-  const [profile] = useProfile()
 
   const recentAlbums = []
   const seen = new Set<string>()
@@ -63,18 +60,7 @@ export function Home({ navigate }: { navigate: Navigate }) {
 
   return (
     <div className="home">
-      <div className="home-head">
-        <h1 className="page-title">{greeting()}</h1>
-        <button
-          type="button"
-          className="home-avatar"
-          onClick={() => navigate({ type: 'profile' })}
-          aria-label="Abrir perfil"
-        >
-          <Avatar name={profile.name} photo={profile.photo} />
-          <span>{profile.name}</span>
-        </button>
-      </div>
+      <h1 className="page-title">{greeting()}</h1>
 
       <div className="quick-grid">
         {quickItems.map((item) => (
