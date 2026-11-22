@@ -13,7 +13,6 @@ import { NativeAudio } from '@capgo/capacitor-native-audio'
 import { ALBUMS, TRACKS, getTrack, registerTracks, type Track } from './catalog'
 import { shuffleArray } from './format'
 import { getYT, loadYouTubeApi, resolveYouTubeAudio, type YTPlayer } from './youtube'
-import { bindSessionHandlers, publishPosition, publishState, publishTrack } from './mediaSession'
 
 type RepeatMode = 'off' | 'all' | 'one'
 
@@ -143,8 +142,6 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   isPlayingRef.current = isPlaying
   const currentTimeRef = useRef(currentTime)
   currentTimeRef.current = currentTime
-  const durationRef = useRef(duration)
-  durationRef.current = duration
   const usesIframeRef = useRef(usesIframe)
   usesIframeRef.current = usesIframe
   const endedRef = useRef<() => void>(() => {})
@@ -237,7 +234,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     void NativeAudio.configure({
       background: true,
       backgroundPlayback: true,
-      showNotification: false,
+      // Com a notificação ligada o plugin arranca o serviço em primeiro plano,
+      // que é a peça que impede o Android de matar a música fora da app.
+      showNotification: true,
       focus: true,
     }).catch(() => {
       /* configuração indisponível */
@@ -739,33 +738,6 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     endedRef.current = handleEnded
   }, [handleEnded])
 
-  // Controles da notificação e do ecrã bloqueado (play, pause, seguinte, anterior, seek).
-  useEffect(() => {
-    void bindSessionHandlers({
-      play: () => setIsPlaying(true),
-      pause: () => setIsPlaying(false),
-      next,
-      prev,
-      seek,
-    })
-  }, [next, prev, seek])
-
-  useEffect(() => {
-    void publishTrack(current)
-  }, [current])
-
-  useEffect(() => {
-    void publishState(isPlaying)
-  }, [isPlaying, current])
-
-  useEffect(() => {
-    if (!current) return
-    const tick = () => void publishPosition(currentTimeRef.current, durationRef.current)
-    tick()
-    if (!isPlaying) return
-    const timer = window.setInterval(tick, 1000)
-    return () => window.clearInterval(timer)
-  }, [current, isPlaying])
 
   const effectiveDuration =
     duration ||
