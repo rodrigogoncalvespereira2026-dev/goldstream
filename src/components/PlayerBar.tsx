@@ -164,14 +164,14 @@ export function PlayerBar() {
             onClick={cycleRepeat}
             aria-label={
               repeat === 'one'
-                ? 'Repetir esta faixa'
+                ? 'Repetir esta faixa continuamente'
                 : repeat === 'all'
-                  ? 'Repetir fila'
+                  ? 'Repetir fila continuamente'
                   : 'Repetir desligado'
             }
             aria-pressed={repeat !== 'off'}
             title={
-              repeat === 'one' ? 'Repetindo a faixa' : repeat === 'all' ? 'Repetindo a fila' : 'Repetir'
+              repeat === 'one' ? 'Repetindo a faixa atual' : repeat === 'all' ? 'Repetindo a fila de reprodução' : 'Modo de repetição desligado'
             }
           >
             {repeat === 'one' ? <RepeatOneIcon size={19} /> : <RepeatIcon size={19} />}
