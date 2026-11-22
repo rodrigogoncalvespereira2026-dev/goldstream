@@ -174,7 +174,7 @@ export function PlayerBar() {
               repeat === 'one' ? 'Repetindo a faixa atual' : repeat === 'all' ? 'Repetindo a fila de reprodução' : 'Modo de repetição desligado'
             }
           >
-            {repeat === 'one' ? <RepeatOneIcon size={19} /> : <RepeatIcon size={19} />}
+            {repeat === 'one' ? <RepeatOneIcon size={24} /> : <RepeatIcon size={24} />}
             <span className="repeat-badge">1</span>
           </button>
         </div>

@@ -1673,13 +1673,15 @@ img {
   background: transparent;
   border: none;
   cursor: pointer;
-  padding: 12px;
+  padding: 6px;
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #b3b3b3;
   transition: color 0.2s ease, transform 0.1s ease;
+  width: 44px;
+  height: 44px;
 }
 
 .player-repeat:hover {
@@ -1700,9 +1702,9 @@ img {
 .player-repeat.is-on::after {
   content: '';
   position: absolute;
-  bottom: 4px;
-  width: 4px;
-  height: 4px;
+  bottom: 8px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
   background-color: #1ed760;
 }
@@ -1710,18 +1712,18 @@ img {
 /* Badge com "1" para o modo de repetir uma faixa */
 .repeat-badge {
   position: absolute;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 800;
   background-color: #1ed760;
   color: #121212;
   border-radius: 50%;
-  width: 13px;
-  height: 13px;
+  width: 16px;
+  height: 16px;
   display: none;
   align-items: center;
   justify-content: center;
-  top: 6px;
-  right: 6px;
+  top: 8px;
+  right: 8px;
 }
 
 .player-repeat.repeat-one .repeat-badge {
