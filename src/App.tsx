@@ -20,6 +20,12 @@ import { Collection } from './pages/Collection'
 import { Auth } from './pages/Auth'
 import { saveAccountData, useAccount } from './lib/account'
 import { PlayerProvider, usePlayer } from './lib/player'
+import {
+  applyRetargetingPixelChoice,
+  trackPageView,
+  useConsentPreferences,
+} from './lib/analytics'
+import { PrivacyConsent } from './components/PrivacyConsent'
 import { GENRES, getAlbum, getPlaylist } from './lib/catalog'
 import { cx } from './lib/format'
 import type { View } from './lib/nav'
@@ -48,6 +54,11 @@ function Shell() {
   const scrollerRef = useRef<HTMLDivElement>(null)
 
   const view = history[pointer] ?? history[0]
+  const consent = useConsentPreferences()
+
+  useEffect(() => {
+    if (consent?.analytics) trackPageView(view.type)
+  }, [consent?.analytics, view.type])
 
   const navigate = useCallback(
     (target: View) => {
@@ -75,7 +86,9 @@ function Shell() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null
+      // O alvo nem sempre é um elemento (pode ser window/document), por isso
+      // confirmamos antes de usar closest().
+      const target = event.target instanceof Element ? event.target : null
       if (
         event.defaultPrevented ||
         (target &&
@@ -83,7 +96,7 @@ function Shell() {
             target.tagName === 'TEXTAREA' ||
             target.tagName === 'SELECT' ||
             target.tagName === 'A' ||
-            target.isContentEditable ||
+            (target as HTMLElement).isContentEditable ||
             target.closest('button, [role="button"], [role="slider"]')))
       ) {
         return
@@ -193,6 +206,11 @@ function Shell() {
 
 export default function App() {
   const account = useAccount()
+  const consent = useConsentPreferences()
+
+  useEffect(() => {
+    applyRetargetingPixelChoice(consent?.retargeting === true)
+  }, [consent?.retargeting])
 
   // Guarda os dados da conta sempre que a app sai para segundo plano ou fecha.
   useEffect(() => {
@@ -212,11 +230,21 @@ export default function App() {
     }
   }, [account])
 
-  if (!account) return <Auth />
+  if (!account) {
+    return (
+      <>
+        <Auth />
+        <PrivacyConsent />
+      </>
+    )
+  }
 
   return (
-    <PlayerProvider key={account.id}>
-      <Shell />
-    </PlayerProvider>
+    <>
+      <PlayerProvider key={account.id}>
+        <Shell />
+      </PlayerProvider>
+      <PrivacyConsent />
+    </>
   )
 }

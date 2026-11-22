@@ -5,6 +5,7 @@ import {
   PLAYLISTS,
   genreAlbums,
   getAlbum,
+  getTrack,
   getTracks,
 } from '../lib/catalog'
 import { AlbumCard, Section, TrackRow } from '../components/Cards'
@@ -37,7 +38,10 @@ export function Collection({ view, navigate }: { view: CollectionView; navigate:
     if (view.type === 'album') {
       const album = getAlbum(view.id)
       if (!album) return null
-      const total = album.trackIds.reduce((sum, id) => sum + (durations[id] ?? 0), 0)
+      const total = album.trackIds.reduce(
+        (sum, id) => sum + (durations[id] ?? getTrack(id)?.duration ?? 0),
+        0,
+      )
       return {
         kicker: 'Álbum',
         title: album.title,
@@ -58,7 +62,10 @@ export function Collection({ view, navigate }: { view: CollectionView; navigate:
     if (view.type === 'playlist') {
       const playlist = PLAYLISTS.find((item) => item.id === view.id)
       if (!playlist) return null
-      const total = playlist.trackIds.reduce((sum, id) => sum + (durations[id] ?? 0), 0)
+      const total = playlist.trackIds.reduce(
+        (sum, id) => sum + (durations[id] ?? getTrack(id)?.duration ?? 0),
+        0,
+      )
       return {
         kicker: 'Playlist',
         title: playlist.name,
@@ -75,7 +82,10 @@ export function Collection({ view, navigate }: { view: CollectionView; navigate:
     }
 
     if (view.type === 'liked') {
-      const total = liked.reduce((sum, id) => sum + (durations[id] ?? 0), 0)
+      const total = liked.reduce(
+        (sum, id) => sum + (durations[id] ?? getTrack(id)?.duration ?? 0),
+        0,
+      )
       return {
         kicker: 'Playlist',
         title: 'Músicas Curtidas',
@@ -90,7 +100,10 @@ export function Collection({ view, navigate }: { view: CollectionView; navigate:
     const genre = GENRES.find((item) => item.name === view.name)
     const albums = genreAlbums(view.name)
     const trackIds = albums.flatMap((album) => album.trackIds)
-    const total = trackIds.reduce((sum, id) => sum + (durations[id] ?? 0), 0)
+    const total = trackIds.reduce(
+      (sum, id) => sum + (durations[id] ?? getTrack(id)?.duration ?? 0),
+      0,
+    )
     return {
       kicker: 'Gênero',
       title: view.name,

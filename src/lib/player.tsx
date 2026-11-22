@@ -14,6 +14,7 @@ import { ALBUMS, TRACKS, getTrack, registerTracks, type Track } from './catalog'
 import { shuffleArray } from './format'
 import { getYT, loadYouTubeApi, resolveYouTubeAudio, type YTPlayer } from './youtube'
 import { addListening, addPlay } from './stats'
+import { trackPlaybackRequest } from './analytics'
 
 type RepeatMode = 'off' | 'all' | 'one'
 
@@ -1040,6 +1041,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const playQueue = useCallback(
     (ids: string[], startId?: string) => {
       if (!ids.length) return
+      trackPlaybackRequest()
       const first = startId && ids.includes(startId) ? startId : ids[0]
       const nextOrder = shuffle ? shuffledFrom(ids, first) : [...ids]
       // Uma playlist nova é uma nova oportunidade: deixa tentar de novo as que falharam.

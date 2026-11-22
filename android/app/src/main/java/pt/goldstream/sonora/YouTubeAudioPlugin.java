@@ -15,6 +15,7 @@ import org.schabi.newpipe.extractor.search.SearchExtractor;
 import org.schabi.newpipe.extractor.stream.AudioStream;
 import org.schabi.newpipe.extractor.stream.StreamInfo;
 import org.schabi.newpipe.extractor.stream.StreamInfoItem;
+import org.schabi.newpipe.extractor.stream.VideoStream;
 
 import java.util.Collections;
 import java.util.HashSet;
@@ -141,27 +142,75 @@ public class YouTubeAudioPlugin extends Plugin {
                 final StreamInfo info = StreamInfo.getInfo(ServiceList.YouTube, watchUrl);
                 final List<AudioStream> streams = info.getAudioStreams();
 
-                if (streams == null || streams.isEmpty()) {
+                String url = null;
+                String mimeType = "audio/mp4";
+
+                if (streams != null && !streams.isEmpty()) {
+                    // Prefere mp4/AAC: é o que o ExoPlayer toca com mais fiabilidade.
+                    AudioStream best = null;
+                    for (final AudioStream candidate : streams) {
+                        if (candidate.getContent() == null || candidate.getContent().isEmpty()) continue;
+                        if (best == null) {
+                            best = candidate;
+                            continue;
+                        }
+                        final boolean candidateMp4 = isMp4(candidate.getFormat() != null
+                                ? candidate.getFormat().getMimeType()
+                                : "");
+                        final boolean bestMp4 = isMp4(best.getFormat() != null
+                                ? best.getFormat().getMimeType()
+                                : "");
+                        if (candidateMp4 != bestMp4) {
+                            if (candidateMp4) best = candidate;
+                            continue;
+                        }
+                        if (candidate.getAverageBitrate() > best.getAverageBitrate()) best = candidate;
+                    }
+                    if (best != null) {
+                        url = best.getContent();
+                        mimeType = best.getFormat() != null ? best.getFormat().getMimeType() : "audio/mp4";
+                    }
+                }
+
+                // Último recurso: o vídeo com som. Toca igual, só gasta mais dados.
+                if (url == null) {
+                    try {
+                        final List<VideoStream> muxed = info.getVideoStreams();
+                        if (muxed != null) {
+                            for (final VideoStream candidate : muxed) {
+                                final String content = candidate.getContent();
+                                if (content != null && !content.isEmpty()) {
+                                    url = content;
+                                    mimeType = candidate.getFormat() != null
+                                            ? candidate.getFormat().getMimeType()
+                                            : "video/mp4";
+                                    break;
+                                }
+                            }
+                        }
+                    } catch (final Exception ignored) {
+                        // sem recurso: segue para a mensagem de erro
+                    }
+                }
+
+                if (url == null) {
                     reject(call, "Sem áudio disponível para esta música.");
                     return;
                 }
 
-                AudioStream best = streams.get(0);
-                for (final AudioStream candidate : streams) {
-                    if (candidate.getAverageBitrate() > best.getAverageBitrate()) {
-                        best = candidate;
-                    }
-                }
-
                 final JSObject result = new JSObject();
-                result.put("url", best.getContent());
-                result.put("mimeType", best.getFormat() != null ? best.getFormat().getMimeType() : "audio/mp4");
+                result.put("url", url);
+                result.put("mimeType", mimeType);
 
                 getActivity().runOnUiThread(() -> call.resolve(result));
             } catch (final Exception error) {
                 reject(call, error.getMessage() != null ? error.getMessage() : "Falha ao obter o áudio.");
             }
         }).start();
+    }
+
+    private static boolean isMp4(final String mimeType) {
+        return mimeType != null && mimeType.contains("mp4");
     }
 
     private void reject(final PluginCall call, final String message) {

@@ -6,6 +6,7 @@ import { useMediaQuery } from '../lib/useMediaQuery'
 import { Slider } from './Slider'
 import { CoverImage } from './CoverImage'
 import { NowPlaying } from './NowPlaying'
+import { QueueSheet } from './QueueSheet'
 import { RadioButton } from './RadioButton'
 import {
   HeartIcon,
@@ -15,6 +16,7 @@ import {
   PrevIcon,
   RepeatIcon,
   RepeatOneIcon,
+  QueueIcon,
   ShuffleIcon,
   VideoIcon,
   VolumeIcon,
@@ -24,6 +26,7 @@ import { cx } from '../lib/format'
 export function PlayerBar() {
   const {
     current,
+    queue,
     isPlaying,
     toggle,
     next,
@@ -43,6 +46,7 @@ export function PlayerBar() {
   const { currentTime, duration, seek } = usePlayerTime()
   const isMobile = useMediaQuery('(max-width: 760px)')
   const [expanded, setExpanded] = useState(false)
+  const [queueOpen, setQueueOpen] = useState(false)
 
   // Deslizar a barra para cima abre o ecrã "Agora tocando".
   const touchStartY = useRef<number | null>(null)
@@ -189,6 +193,15 @@ export function PlayerBar() {
       <div className="player-right">
         <button
           type="button"
+          className={cx('icon-button', 'player-queue', queue.length > 0 && 'has-queue')}
+          onClick={() => setQueueOpen(true)}
+          aria-label={`Abrir fila${queue.length ? ` · ${queue.length} músicas` : ''}`}
+          title="Abrir fila"
+        >
+          <QueueIcon size={19} />
+        </button>
+        <button
+          type="button"
           className="icon-button"
           onClick={toggleMute}
           aria-label={muted ? 'Ativar som' : 'Silenciar'}
@@ -206,6 +219,7 @@ export function PlayerBar() {
       </footer>
 
       {isMobile && <NowPlaying open={expanded} onClose={() => setExpanded(false)} />}
+      {!isMobile && queueOpen && <QueueSheet onClose={() => setQueueOpen(false)} />}
     </>
   )
 }

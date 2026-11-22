@@ -6,6 +6,7 @@ import { YouTubeLink } from '../components/YouTubeLink'
 import { BACKGROUNDS, useBackground } from '../lib/backgrounds'
 import { downloadUpdate, reloadApp } from '../lib/update'
 import { saveAccountData, signOut, useAccount } from '../lib/account'
+import { setConsentPreferences, useConsentPreferences } from '../lib/analytics'
 import type { Navigate } from '../lib/nav'
 
 export function Settings({ navigate }: { navigate: Navigate }) {
@@ -13,113 +14,172 @@ export function Settings({ navigate }: { navigate: Navigate }) {
   const [background] = useBackground()
   const currentBackground = BACKGROUNDS.find((item) => item.id === background)
   const account = useAccount()
+  const consent = useConsentPreferences()
+  const consentLabel = consent
+    ? `Analytics ${consent.analytics ? 'permitido' : 'recusado'} · Retargeting ${consent.retargeting ? 'permitido' : 'recusado'}`
+    : 'Ainda não escolhido'
 
   return (
-    <div>
-      <h1 className="page-title">Definições</h1>
+    <div className="settings-page">
+      <header className="settings-intro">
+        <span className="settings-eyebrow">GOLDENSTREAM</span>
+        <h1 className="page-title">Definições</h1>
+        <p>Personaliza a app, gere a tua conta e escolhe como os teus dados são usados.</p>
+      </header>
 
-      <Section title="Atualizar app" note="Sempre a versão mais recente">
-        <p className="settings-note">
-          As músicas e o visual chegam sozinhos, sem instalar nada. Quando houver uma versão nova
-          da app — ícone, notificações, reprodução em segundo plano — baixe por aqui: o Chrome
-          instala por cima e mantém os teus dados. Já não precisa de escrever o endereço.
-        </p>
-        <div className="settings-actions">
-          <button
-            type="button"
-            className="connect-button settings-action"
-            onClick={async () => {
-              setUpdateNote('A abrir o Chrome para transferir…')
-              try {
-                await downloadUpdate()
-                setUpdateNote(
-                  'O Chrome está a transferir a atualização. Quando terminar, toca na notificação para instalar por cima.',
-                )
-              } catch {
-                setUpdateNote('Não consegui abrir o download. Tenta de novo daqui a pouco.')
-              }
-            }}
-          >
-            <DownloadIcon size={18} />
-            Baixar atualização
-          </button>
-          <button type="button" className="ghost-button settings-action" onClick={reloadApp}>
-            <RefreshIcon size={18} />
-            Recarregar conteúdo
-          </button>
+      <div className="settings-grid">
+        <div className="settings-card">
+          <Section title="Conta" note={account?.email ?? 'Sessão aberta'}>
+            <p className="settings-note">
+              {account
+                ? `Olá, ${account.name}. Os teus gostos, playlists e preferências ficam guardados neste dispositivo.`
+                : 'Sem sessão aberta.'}
+            </p>
+            <div className="settings-actions">
+              <button
+                type="button"
+                className="ghost-button settings-action"
+                onClick={() => {
+                  saveAccountData()
+                  signOut()
+                  window.location.reload()
+                }}
+              >
+                Terminar sessão
+              </button>
+            </div>
+          </Section>
         </div>
-        {updateNote && <p className="settings-note settings-note-update">{updateNote}</p>}
-      </Section>
 
-      <Section title="Conta" note={account?.email ?? 'Sessão aberta'}>
-        <p className="settings-note">
-          {account
-            ? `Olá, ${account.name}. As tuas músicas, gostos, estatísticas e fundo ficam guardados nesta conta, neste telemóvel.`
-            : 'Sem sessão aberta.'}
-        </p>
-        <div className="settings-actions">
-          <button
-            type="button"
-            className="ghost-button settings-action"
-            onClick={() => {
-              saveAccountData()
-              signOut()
-              window.location.reload()
-            }}
-          >
-            Terminar sessão
-          </button>
+        <div className="settings-card">
+          <Section title="Aparência" note="Personalização">
+            <p className="settings-note">
+              Escolhe um cenário e ajusta as cores da goldenstream.
+            </p>
+            <div className="settings-actions">
+              <button
+                type="button"
+                className="connect-button settings-action"
+                onClick={() => navigate({ type: 'backgrounds' })}
+              >
+                <SparkleIcon size={18} />
+                Fundos da tela
+              </button>
+              <button
+                type="button"
+                className="ghost-button settings-action"
+                onClick={() => navigate({ type: 'colors' })}
+              >
+                Cores do tema
+              </button>
+            </div>
+            {currentBackground && (
+              <p className="settings-current-value">Fundo atual: {currentBackground.name}</p>
+            )}
+          </Section>
         </div>
-      </Section>
 
-      <Section title="Aparência" note="Fundos animados">
-        <p className="settings-note">
-          Troca o fundo da app por um cenário em movimento — aurora, pôr do sol, oceano, néon,
-          estrelas ou vinil. A escolha fica guardada para as próximas vezes.
-        </p>
-        <div className="settings-actions">
-          <button
-            type="button"
-            className="connect-button settings-action"
-            onClick={() => navigate({ type: 'backgrounds' })}
-          >
-            <SparkleIcon size={18} />
-            Fundos da tela
-          </button>
-          <button
-            type="button"
-            className="ghost-button settings-action"
-            onClick={() => navigate({ type: 'colors' })}
-          >
-            Cores do tema
-          </button>
-          {currentBackground && (
-            <span className="settings-note settings-note-tech">
-              Fundo atual: {currentBackground.name}
-            </span>
-          )}
+        <div className="settings-card">
+          <Section title="Atualizar app" note="Manutenção">
+            <p className="settings-note">
+              Atualiza a instalação ou recarrega o catálogo. Os teus dados locais são preservados.
+            </p>
+            <div className="settings-actions">
+              <button
+                type="button"
+                className="connect-button settings-action"
+                onClick={async () => {
+                  setUpdateNote('A abrir o Chrome para transferir…')
+                  try {
+                    await downloadUpdate()
+                    setUpdateNote(
+                      'Download iniciado. Quando terminar, abre a notificação para instalar a atualização.',
+                    )
+                  } catch {
+                    setUpdateNote('Não consegui abrir o download. Tenta de novo daqui a pouco.')
+                  }
+                }}
+              >
+                <DownloadIcon size={18} />
+                Baixar atualização
+              </button>
+              <button type="button" className="ghost-button settings-action" onClick={reloadApp}>
+                <RefreshIcon size={18} />
+                Recarregar conteúdo
+              </button>
+            </div>
+            {updateNote && <p className="settings-note-update">{updateNote}</p>}
+          </Section>
         </div>
-      </Section>
 
-      <Section title="Tocar por link" note="Experimental">
-        <p className="settings-note">
-          Cole o link de uma música do YouTube para tocar a faixa inteira. Este recurso fica
-          aqui por enquanto, até decidirmos onde ele deve morar.
-        </p>
-        <YouTubeLink />
-      </Section>
+        <div className="settings-card settings-card-wide">
+          <Section title="Privacidade e dados" note={consentLabel}>
+            <p className="settings-note">
+              Estas opções são opcionais e ficam guardadas neste dispositivo. Analytics partilha
+              apenas eventos gerais; retargeting disponibiliza IDs de pixels quando configurados.
+              A app não envia pesquisas, nomes de músicas, dados da conta ou localização e ainda
+              não tem GTM nem pixels configurados.
+            </p>
+            <div className="privacy-settings-options">
+              <label className="privacy-settings-option">
+                <input
+                  type="checkbox"
+                  checked={consent?.analytics ?? false}
+                  onChange={(event) =>
+                    setConsentPreferences({
+                      analytics: event.target.checked,
+                      retargeting: consent?.retargeting ?? false,
+                    })
+                  }
+                />
+                <span>
+                  <strong>Analytics de utilização</strong>
+                  <small>Tipo de página e pedidos de reprodução, sem identificar faixas.</small>
+                </span>
+              </label>
+              <label className="privacy-settings-option">
+                <input
+                  type="checkbox"
+                  checked={consent?.retargeting ?? false}
+                  onChange={(event) =>
+                    setConsentPreferences({
+                      analytics: consent?.analytics ?? false,
+                      retargeting: event.target.checked,
+                    })
+                  }
+                />
+                <span>
+                  <strong>Retargeting e pixels</strong>
+                  <small>Permite usar IDs de publicidade configurados para a app.</small>
+                </span>
+              </label>
+            </div>
+          </Section>
+        </div>
 
-      <Section title="Sobre">
-        <p className="settings-note">
-          O goldenstream é uma demonstração de player de música. As faixas do catálogo são gravações
-          livres do SoundHelix; as buscas usam Audius e YouTube.
-        </p>
-        <p className="settings-note settings-note-tech">
-          Motor de áudio: {Capacitor.isPluginAvailable('NativeAudio') ? 'nativo' : 'navegador'} ·
-          Áudio do YouTube: {Capacitor.isPluginAvailable('YouTubeAudio') ? 'nativo' : 'indisponível'} ·
-          Atualizador: {Capacitor.isPluginAvailable('AppUpdate') ? 'nativo' : 'indisponível'}
-        </p>
-      </Section>
+        <div className="settings-card">
+          <Section title="Tocar por link" note="Experimental">
+            <p className="settings-note">
+              Cola um link do YouTube para ouvir a faixa completa.
+            </p>
+            <YouTubeLink />
+          </Section>
+        </div>
+
+        <div className="settings-card">
+          <Section title="Sobre" note="Informação da app">
+            <p className="settings-note">
+              A goldenstream é uma demonstração de player. O catálogo usa faixas livres do
+              SoundHelix; as pesquisas consultam Audius e YouTube.
+            </p>
+            <div className="settings-tech-list">
+              <span>Áudio <strong>{Capacitor.isPluginAvailable('NativeAudio') ? 'Nativo' : 'Navegador'}</strong></span>
+              <span>YouTube <strong>{Capacitor.isPluginAvailable('YouTubeAudio') ? 'Nativo' : 'Indisponível'}</strong></span>
+              <span>Atualização <strong>{Capacitor.isPluginAvailable('AppUpdate') ? 'Nativa' : 'Indisponível'}</strong></span>
+            </div>
+          </Section>
+        </div>
+      </div>
     </div>
   )
 }
