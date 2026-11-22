@@ -90,6 +90,19 @@ const readArray = <T,>(key: string): T[] => {
 // Faixas externas já vistas: restauram curtidas e "tocadas recentemente" após recarregar.
 registerTracks(readArray<Track>(KEYS.tracks))
 
+/** Item de fila do motor nativo, com os dados que aparecem no aviso do sistema. */
+const nativeItem = (track: Track, assetPath: string) => ({
+  assetId: track.id,
+  assetPath,
+  isUrl: true,
+  notificationMetadata: {
+    title: track.title,
+    artist: track.artist,
+    album: track.albumTitle,
+    artworkUrl: new URL(track.cover, window.location.origin).href,
+  },
+})
+
 const shuffledFrom = (ids: string[], first: string | undefined): string[] => {
   const rest = ids.filter((id) => id !== first)
   return first ? [first, ...shuffleArray(rest)] : shuffleArray(rest)
@@ -108,6 +121,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const nativePlayingRef = useRef<Set<string>>(new Set())
   /** Fila do motor nativo: impede dois preload/play ao mesmo tempo para a mesma faixa. */
   const nativeQueueRef = useRef<Promise<void>>(Promise.resolve())
+  /** Fila nativa ativa: o ExoPlayer toca e avança a lista sozinho, mesmo bloqueado. */
+  const nativeQueueActiveRef = useRef(false)
+  /** Faixas já entregues à fila nativa. */
+  const nativeQueuedRef = useRef<Set<string>>(new Set())
+  /** Faixa que a própria fila nativa começou (não precisa de ser tocada outra vez). */
+  const nativeAdvancedRef = useRef<string | null>(null)
+  const addRecentRef = useRef<(id: string) => void>(() => {})
 
   const [stageEl, setStageEl] = useState<HTMLElement | null>(null)
   const [playerNotice, setPlayerNotice] = useState<PlayerNotice | null>(null)
@@ -131,6 +151,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // ecrã bloqueado. Sem URL, cai para o iframe (que pausa fora de primeiro plano).
   const [ytAudio, setYtAudio] = useState<Record<string, string>>({})
   const [ytAudioFailed, setYtAudioFailed] = useState<Record<string, boolean>>({})
+  const ytAudioRef = useRef(ytAudio)
+  ytAudioRef.current = ytAudio
 
   const currentId = pos >= 0 ? order[pos] : undefined
   const current = useMemo(() => getTrack(currentId) ?? null, [currentId])
@@ -261,7 +283,21 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         if (!disposed) setCurrentTime(event.currentTime)
       })
       const completeListener = await NativeAudio.addListener('complete', () => {
-        if (!disposed) endedRef.current()
+        // Com fila nativa é o ExoPlayer que passa à faixa seguinte: nada a fazer aqui.
+        if (!disposed && !nativeQueueActiveRef.current) endedRef.current()
+      })
+      const queueListener = await NativeAudio.addListener('queueChange', (event) => {
+        if (disposed || usesIframeRef.current) return
+        const assetId = event.assetId
+        if (!assetId) return
+        const index = stateRef.current.order.indexOf(assetId)
+        if (index < 0) return
+        nativeLoadedRef.current = assetId
+        nativeAdvancedRef.current = assetId
+        setPos(index)
+        setIsPlaying(true)
+        setCurrentTime(0)
+        addRecentRef.current(assetId)
       })
       const stateListener = await NativeAudio.addListener('playbackState', (event) => {
         if (disposed || usesIframeRef.current) return
@@ -272,6 +308,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       cleanups.push(
         () => void timeListener.remove(),
         () => void completeListener.remove(),
+        () => void queueListener.remove(),
         () => void stateListener.remove(),
       )
     })()
@@ -304,35 +341,30 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       const run = async () => {
         if (!track || usesIframe) {
           nativeLoadedRef.current = null
+          nativeQueueActiveRef.current = false
+          nativeQueuedRef.current = new Set()
+          await NativeAudio.clearQueue().catch(() => {})
           await silenceOthers(null)
           return
         }
-        const src = ytAudioSrc ?? track.src
-        if (!src) return
 
-        await silenceOthers(track.id)
-
-        if (nativeLoadedRef.current !== track.id) {
-          await NativeAudio.preload({
-            assetId: track.id,
-            assetPath: src,
-            isUrl: true,
-            notificationMetadata: {
-              title: track.title,
-              artist: track.artist,
-              album: track.albumTitle,
-              artworkUrl: new URL(track.cover, window.location.origin).href,
-            },
-          }).catch(() => {})
-          if (cancelled) return
+        // A fila nativa arrancou esta faixa sozinha: só acertar o estado da app.
+        if (nativeAdvancedRef.current === track.id) {
+          nativeAdvancedRef.current = null
           nativeLoadedRef.current = track.id
-          loadedIdRef.current = track.id
           setCurrentTime(0)
+          return
         }
+
+        // Ainda não está na fila: o efeito abaixo manda construi-la a partir daqui.
+        if (!nativeQueuedRef.current.has(track.id)) return
+
         nativePlayingRef.current.add(track.id)
         if (cancelled) return
         if (isPlaying) {
-          await NativeAudio.play({ assetId: track.id }).catch(() => setIsPlaying(false))
+          await NativeAudio.resume({ assetId: track.id }).catch(() =>
+            NativeAudio.play({ assetId: track.id }).catch(() => {}),
+          )
         } else {
           await NativeAudio.pause({ assetId: track.id }).catch(() => {})
         }
@@ -366,6 +398,71 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       audio.pause()
     }
   }, [current, isPlaying, durations, usesIframe, ytAudioSrc, nativePlatform])
+
+  /**
+   * Entrega a lista ao motor nativo. É isto que faz a música mudar sozinha e voltar a
+   * arrancar com o telemóvel bloqueado: a passagem de faixa é feita pelo ExoPlayer, sem
+   * depender do JavaScript da app acordado.
+   */
+  useEffect(() => {
+    if (!nativePlatform || usesIframe || !current) return
+    if (nativeQueuedRef.current.has(current.id)) return
+
+    const ids = order.length ? order : [current.id]
+    const startIndex = Math.max(0, ids.indexOf(current.id))
+    let cancelled = false
+
+    const srcFor = async (track: Track): Promise<string | null> => {
+      if (track.videoId) {
+        const direct = ytAudioRef.current[track.id]
+        if (direct) return direct
+        return resolveYouTubeAudio(track.videoId)
+      }
+      return track.src || null
+    }
+
+    void (async () => {
+      const headSrc = await srcFor(current)
+      if (cancelled || !headSrc) return
+
+      await NativeAudio.clearQueue().catch(() => {})
+      if (cancelled) return
+
+      nativeQueuedRef.current = new Set([current.id])
+      nativeQueueActiveRef.current = true
+      nativeLoadedRef.current = current.id
+      nativePlayingRef.current.add(current.id)
+
+      await NativeAudio.setQueue({
+        items: [nativeItem(current, headSrc)],
+        startIndex: 0,
+        autoPlay: isPlayingRef.current,
+      }).catch(() => {})
+
+      // Vai preparando as seguintes: 14 faixas garantem horas de música sem JS.
+      for (const id of ids.slice(startIndex + 1)) {
+        if (cancelled || nativeQueuedRef.current.size >= 14) return
+        const track = getTrack(id)
+        if (!track || nativeQueuedRef.current.has(id)) continue
+        const src = await srcFor(track)
+        if (cancelled) return
+        if (!src) continue
+        await NativeAudio.queueAdd({ items: [nativeItem(track, src)] }).catch(() => {})
+        nativeQueuedRef.current.add(id)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [current, order, nativePlatform, usesIframe])
+
+  // Repetir também é do motor nativo (uma faixa, a lista toda, ou nada).
+  useEffect(() => {
+    if (!nativePlatform) return
+    const mode = repeat === 'one' ? 'one' : repeat === 'all' ? 'all' : 'none'
+    void NativeAudio.setRepeatMode({ mode }).catch(() => {})
+  }, [repeat, nativePlatform])
 
   // Se a faixa deixou de tocar no iframe (áudio resolvido ou outra faixa), o vídeo tem de calar.
   useEffect(() => {
@@ -615,6 +712,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const addRecent = useCallback((id: string) => {
     setRecent((prev) => [id, ...prev.filter((item) => item !== id)].slice(0, 12))
   }, [])
+  addRecentRef.current = addRecent
 
   const playQueue = useCallback(
     (ids: string[], startId?: string) => {
@@ -657,6 +755,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   const step = useCallback(
     (direction: 1 | -1, auto = false) => {
+      // Com a fila nativa quem manda é o ExoPlayer: pedimos-lhe para avançar ou recuar,
+      // para as transições funcionarem também com o ecrã bloqueado.
+      if (!auto && nativeQueueActiveRef.current) {
+        void (direction > 0 ? NativeAudio.queueNext() : NativeAudio.queuePrevious()).catch(() => {})
+        return
+      }
       const { order: list, pos: index, repeat: mode } = stateRef.current
       if (!list.length) return
       let nextIndex = index + direction
@@ -745,6 +849,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   const handleEnded = useCallback(() => {
     const { repeat: mode } = stateRef.current
+    if (nativeQueueActiveRef.current) return
     if (mode === 'one') {
       if (!usesIframeRef.current && Capacitor.isNativePlatform()) {
         const assetId = nativeLoadedRef.current
