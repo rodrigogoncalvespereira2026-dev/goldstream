@@ -1,7 +1,7 @@
 import { Section } from '../components/Cards'
-import { RefreshIcon } from '../components/Icons'
+import { DownloadIcon, RefreshIcon } from '../components/Icons'
 import { YouTubeLink } from '../components/YouTubeLink'
-import { reloadApp } from '../lib/update'
+import { downloadUpdate, reloadApp } from '../lib/update'
 
 export function Settings() {
   return (
@@ -10,14 +10,20 @@ export function Settings() {
 
       <Section title="Atualizar app" note="Sempre a versão mais recente">
         <p className="settings-note">
-          O goldenstream abre direto a versão publicada online, por isso as novidades chegam sozinhas,
-          sem instalar um ficheiro novo. Se algo ainda aparecer como antes, toque no botão para
-          recarregar.
+          As músicas e o visual chegam sozinhos, sem instalar nada. Quando houver uma versão nova
+          da app — ícone, notificações, reprodução em segundo plano — baixe por aqui: o Chrome
+          instala por cima e mantém os teus dados. Já não precisa de escrever o endereço.
         </p>
-        <button type="button" className="connect-button settings-action" onClick={reloadApp}>
-          <RefreshIcon size={18} />
-          Atualizar agora
-        </button>
+        <div className="settings-actions">
+          <button type="button" className="connect-button settings-action" onClick={downloadUpdate}>
+            <DownloadIcon size={18} />
+            Baixar atualização
+          </button>
+          <button type="button" className="ghost-button settings-action" onClick={reloadApp}>
+            <RefreshIcon size={18} />
+            Recarregar conteúdo
+          </button>
+        </div>
       </Section>
 
       <Section title="Tocar por link" note="Experimental">

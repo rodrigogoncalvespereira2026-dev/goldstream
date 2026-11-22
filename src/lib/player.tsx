@@ -8,6 +8,8 @@ import {
   useState,
   type ReactNode,
 } from 'react'
+import { Capacitor } from '@capacitor/core'
+import { NativeAudio } from '@capgo/capacitor-native-audio'
 import { ALBUMS, TRACKS, getTrack, registerTracks, type Track } from './catalog'
 import { shuffleArray } from './format'
 import { getYT, loadYouTubeApi, resolveYouTubeAudio, type YTPlayer } from './youtube'
@@ -96,6 +98,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const ytPlayerRef = useRef<YTPlayer | null>(null)
   const ytVideoRef = useRef<string | null>(null)
   const ytTimerRef = useRef<number | null>(null)
+  /** No telemóvel o áudio toca no motor nativo (ExoPlayer), que sobrevive ao ecrã bloqueado. */
+  const nativePlatform = Capacitor.isNativePlatform()
+  const nativeLoadedRef = useRef<string | null>(null)
 
   const [stageEl, setStageEl] = useState<HTMLElement | null>(null)
   const [playerNotice, setPlayerNotice] = useState<PlayerNotice | null>(null)
@@ -223,8 +228,100 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  // ---------- motor nativo (Android): continua com a app em segundo plano ----------
+  useEffect(() => {
+    if (!nativePlatform) return
+    let disposed = false
+    const cleanups: Array<() => void> = []
+
+    void NativeAudio.configure({
+      background: true,
+      backgroundPlayback: true,
+      showNotification: false,
+      focus: true,
+    }).catch(() => {
+      /* configuração indisponível */
+    })
+
+    void (async () => {
+      const timeListener = await NativeAudio.addListener('currentTime', (event) => {
+        if (!disposed) setCurrentTime(event.currentTime)
+      })
+      const completeListener = await NativeAudio.addListener('complete', () => {
+        if (!disposed) endedRef.current()
+      })
+      const stateListener = await NativeAudio.addListener('playbackState', (event) => {
+        if (disposed || usesIframeRef.current) return
+        if (typeof event.currentTime === 'number') setCurrentTime(event.currentTime)
+        if (typeof event.duration === 'number' && event.duration > 0) setDuration(event.duration)
+        setIsPlaying(event.isPlaying)
+      })
+      cleanups.push(
+        () => void timeListener.remove(),
+        () => void completeListener.remove(),
+        () => void stateListener.remove(),
+      )
+    })()
+
+    return () => {
+      disposed = true
+      cleanups.forEach((run) => run())
+    }
+  }, [nativePlatform])
+
   // Load the selected track and honour the play/pause intent.
   useEffect(() => {
+    if (nativePlatform) {
+      const track = current
+      const previous = nativeLoadedRef.current
+      let cancelled = false
+
+      const run = async () => {
+        if (!track || usesIframe) {
+          if (previous) {
+            nativeLoadedRef.current = null
+            await NativeAudio.stop({ assetId: previous }).catch(() => {})
+          }
+          return
+        }
+        const src = ytAudioSrc ?? track.src
+        if (!src) return
+        if (previous && previous !== track.id) {
+          nativeLoadedRef.current = null
+          await NativeAudio.stop({ assetId: previous }).catch(() => {})
+          await NativeAudio.unload({ assetId: previous }).catch(() => {})
+        }
+        if (nativeLoadedRef.current !== track.id) {
+          await NativeAudio.preload({
+            assetId: track.id,
+            assetPath: src,
+            isUrl: true,
+            notificationMetadata: {
+              title: track.title,
+              artist: track.artist,
+              album: track.albumTitle,
+              artworkUrl: new URL(track.cover, window.location.origin).href,
+            },
+          }).catch(() => {})
+          if (cancelled) return
+          nativeLoadedRef.current = track.id
+          loadedIdRef.current = track.id
+          setCurrentTime(0)
+        }
+        if (cancelled) return
+        if (isPlaying) {
+          await NativeAudio.play({ assetId: track.id }).catch(() => setIsPlaying(false))
+        } else {
+          await NativeAudio.pause({ assetId: track.id }).catch(() => {})
+        }
+      }
+
+      void run()
+      return () => {
+        cancelled = true
+      }
+    }
+
     const audio = audioRef.current
     if (!audio) return
     if (!current || usesIframe) {
@@ -245,9 +342,19 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     } else {
       audio.pause()
     }
-  }, [current, isPlaying, durations, usesIframe, ytAudioSrc])
+  }, [current, isPlaying, durations, usesIframe, ytAudioSrc, nativePlatform])
 
   useEffect(() => {
+    if (nativePlatform) {
+      const assetId = nativeLoadedRef.current
+      if (assetId) {
+        void NativeAudio.setVolume({
+          assetId,
+          volume: muted ? 0.001 : Math.max(0.01, volume),
+        }).catch(() => {})
+      }
+      return
+    }
     const audio = audioRef.current
     if (audio) audio.volume = volume
     try {
@@ -255,7 +362,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     } catch {
       /* player ainda não existe */
     }
-  }, [volume, muted])
+  }, [volume, muted, nativePlatform])
 
   useEffect(() => {
     const audio = audioRef.current
@@ -537,6 +644,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const next = useCallback(() => step(1), [step])
 
   const seek = useCallback((seconds: number) => {
+    if (!usesIframeRef.current && Capacitor.isNativePlatform()) {
+      setCurrentTime(seconds)
+      const assetId = nativeLoadedRef.current
+      if (assetId) void NativeAudio.setCurrentTime({ assetId, time: seconds }).catch(() => {})
+      return
+    }
     if (usesIframeRef.current) {
       try {
         ytPlayerRef.current?.seekTo?.(seconds, true)
@@ -598,6 +711,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const handleEnded = useCallback(() => {
     const { repeat: mode } = stateRef.current
     if (mode === 'one') {
+      if (!usesIframeRef.current && Capacitor.isNativePlatform()) {
+        const assetId = nativeLoadedRef.current
+        if (assetId) void NativeAudio.play({ assetId, time: 0 }).catch(() => {})
+        return
+      }
       if (usesIframeRef.current) {
         try {
           ytPlayerRef.current?.seekTo?.(0, true)
