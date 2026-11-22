@@ -14,6 +14,8 @@ import { Backgrounds } from './pages/Backgrounds'
 import { BackgroundScene } from './components/BackgroundScene'
 import { useBackground } from './lib/backgrounds'
 import { Collection } from './pages/Collection'
+import { Auth } from './pages/Auth'
+import { saveAccountData, useAccount } from './lib/account'
 import { PlayerProvider, usePlayer } from './lib/player'
 import { GENRES, getAlbum, getPlaylist } from './lib/catalog'
 import { cx } from './lib/format'
@@ -178,8 +180,30 @@ function Shell() {
 }
 
 export default function App() {
+  const account = useAccount()
+
+  // Guarda os dados da conta sempre que a app sai para segundo plano ou fecha.
+  useEffect(() => {
+    if (!account) return
+    const save = () => saveAccountData()
+    const onHidden = () => {
+      if (document.visibilityState === 'hidden') save()
+    }
+    document.addEventListener('visibilitychange', onHidden)
+    window.addEventListener('pagehide', save)
+    const timer = window.setInterval(save, 15000)
+    return () => {
+      save()
+      document.removeEventListener('visibilitychange', onHidden)
+      window.removeEventListener('pagehide', save)
+      window.clearInterval(timer)
+    }
+  }, [account])
+
+  if (!account) return <Auth />
+
   return (
-    <PlayerProvider>
+    <PlayerProvider key={account.id}>
       <Shell />
     </PlayerProvider>
   )

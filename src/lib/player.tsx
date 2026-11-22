@@ -63,6 +63,22 @@ const KEYS = {
   volume: 'sonora:volume',
   recent: 'sonora:recent',
   tracks: 'sonora:tracks',
+  player: 'sonora:player',
+}
+
+/** Última fila/faixa mostrada, para voltar a aparecer ao reabrir a app. */
+const readPlayerState = (): { order: string[]; pos: number; playing: boolean } => {
+  const saved = readStored<{ order?: unknown; pos?: unknown; playing?: unknown }>(KEYS.player, {})
+  const raw = Array.isArray(saved.order) ? saved.order : []
+  const ids = raw.filter(
+    (id): id is string => typeof id === 'string' && Boolean(getTrack(id)),
+  )
+  const index = typeof saved.pos === 'number' ? Math.floor(saved.pos) : -1
+  return {
+    order: ids,
+    pos: index >= 0 && index < ids.length ? index : -1,
+    playing: saved.playing === true,
+  }
 }
 
 const readStored = <T,>(key: string, fallback: T): T => {
@@ -138,9 +154,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   const [stageEl, setStageEl] = useState<HTMLElement | null>(null)
   const [playerNotice, setPlayerNotice] = useState<PlayerNotice | null>(null)
-  const [order, setOrder] = useState<string[]>([])
+  const [order, setOrder] = useState<string[]>(() => readPlayerState().order)
   const [contextQueue, setContextQueue] = useState<string[]>([])
-  const [pos, setPos] = useState(-1)
+  const [pos, setPos] = useState(() => readPlayerState().pos)
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
@@ -428,6 +444,50 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       cleanups.forEach((run) => run())
     }
   }, [nativePlatform])
+
+  // Guarda a faixa em curso para o "agora tocando" voltar a aparecer ao reabrir a app.
+  useEffect(() => {
+    if (!order.length || pos < 0) return
+    store(KEYS.player, { order, pos, playing: isPlaying })
+  }, [order, pos, isPlaying])
+
+  /** Valor de reprodução que estava guardado quando a app arrancou. */
+  const restoredPlayingRef = useRef(readPlayerState().playing)
+
+  /**
+   * Ao reabrir a app o serviço nativo pode continuar a tocar. Adota a faixa que o
+   * motor tem (para o botão de pausa funcionar) e acerta o ecrã com ela.
+   */
+  const syncFromNative = useCallback(async () => {
+    if (!nativePlatform) return
+    try {
+      const state = await NativeAudio.getQueueState()
+      const assetId = state?.assetId
+      if (!assetId || !getTrack(assetId)) return
+      const ids = state.assetIds ?? []
+      nativeLoadedRef.current = assetId
+      nativePlayingRef.current.add(assetId)
+      nativeQueueActiveRef.current = true
+      ids.forEach((id) => nativeQueuedRef.current.add(id))
+      const base = stateRef.current.order.length ? stateRef.current.order : ids
+      const index = base.indexOf(assetId)
+      setOrder(index >= 0 ? base : [assetId, ...base])
+      setPos(index >= 0 ? index : 0)
+      setIntent(restoredPlayingRef.current)
+    } catch {
+      /* sem fila ativa */
+    }
+  }, [nativePlatform, setIntent])
+
+  useEffect(() => {
+    if (!nativePlatform) return
+    void syncFromNative()
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void syncFromNative()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [nativePlatform, syncFromNative])
 
   // Load the selected track and honour the play/pause intent.
   useEffect(() => {

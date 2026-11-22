@@ -3216,3 +3216,138 @@ img {
   background: #fbbf24;
   opacity: 0.4;
 }
+
+/* ---------------- Conta ---------------- */
+
+.auth-screen {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: #070707;
+  overflow-y: auto;
+}
+
+.auth-scene {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.auth-blob {
+  position: absolute;
+  width: 58vmax;
+  height: 58vmax;
+  border-radius: 50%;
+  filter: blur(70px);
+  opacity: 0.45;
+}
+
+.auth-blob.a {
+  top: -26%;
+  left: -20%;
+  background: #17c77a;
+  animation: bg-drift 24s ease-in-out infinite alternate;
+}
+
+.auth-blob.b {
+  right: -22%;
+  bottom: -30%;
+  background: #0e7490;
+  animation: bg-drift 32s ease-in-out infinite alternate-reverse;
+}
+
+.auth-card {
+  position: relative;
+  z-index: 1;
+  width: min(420px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 28px 24px;
+  border-radius: 18px;
+  background: rgba(18, 18, 18, 0.93);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+}
+
+.auth-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.auth-title {
+  margin-top: 6px;
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+
+.auth-note {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.auth-field input {
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid #3a3a3a;
+  background: #101010;
+  color: var(--text);
+  font-size: 15px;
+}
+
+.auth-field input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.auth-error {
+  font-size: 13px;
+  color: #ff8a8a;
+}
+
+.auth-submit {
+  margin-top: 6px;
+  padding: 13px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #04140a;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.auth-submit:disabled {
+  opacity: 0.65;
+  cursor: progress;
+}
+
+.auth-switch {
+  font-size: 13px;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.auth-foot {
+  margin-top: 4px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #7a7a7a;
+}

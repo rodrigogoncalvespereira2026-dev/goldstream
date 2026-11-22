@@ -5,12 +5,14 @@ import { DownloadIcon, RefreshIcon, SparkleIcon } from '../components/Icons'
 import { YouTubeLink } from '../components/YouTubeLink'
 import { BACKGROUNDS, useBackground } from '../lib/backgrounds'
 import { downloadUpdate, reloadApp } from '../lib/update'
+import { saveAccountData, signOut, useAccount } from '../lib/account'
 import type { Navigate } from '../lib/nav'
 
 export function Settings({ navigate }: { navigate: Navigate }) {
   const [updateNote, setUpdateNote] = useState('')
   const [background] = useBackground()
   const currentBackground = BACKGROUNDS.find((item) => item.id === background)
+  const account = useAccount()
 
   return (
     <div>
@@ -47,6 +49,27 @@ export function Settings({ navigate }: { navigate: Navigate }) {
           </button>
         </div>
         {updateNote && <p className="settings-note settings-note-update">{updateNote}</p>}
+      </Section>
+
+      <Section title="Conta" note={account?.email ?? 'Sessão aberta'}>
+        <p className="settings-note">
+          {account
+            ? `Olá, ${account.name}. As tuas músicas, gostos, estatísticas e fundo ficam guardados nesta conta, neste telemóvel.`
+            : 'Sem sessão aberta.'}
+        </p>
+        <div className="settings-actions">
+          <button
+            type="button"
+            className="ghost-button settings-action"
+            onClick={() => {
+              saveAccountData()
+              signOut()
+              window.location.reload()
+            }}
+          >
+            Terminar sessão
+          </button>
+        </div>
       </Section>
 
       <Section title="Aparência" note="Fundos animados">
