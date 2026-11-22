@@ -13,6 +13,7 @@ export const YOUTUBE_API_KEY = 'AIzaSyDxHoaiSi6nTYeMKBgdt9Bj1IWto7KZOnA'
 export type YTPlayer = {
   playVideo?: () => void
   pauseVideo?: () => void
+  stopVideo?: () => void
   seekTo?: (seconds: number, allowSeekAhead: boolean) => void
   setVolume?: (volume: number) => void
   getCurrentTime?: () => number

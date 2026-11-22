@@ -100,6 +100,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   /** No telemóvel o áudio toca no motor nativo (ExoPlayer), que sobrevive ao ecrã bloqueado. */
   const nativePlatform = Capacitor.isNativePlatform()
   const nativeLoadedRef = useRef<string | null>(null)
+  /** Assets do motor nativo que ainda estão carregados (têm de ser calados ao trocar). */
+  const nativePlayingRef = useRef<Set<string>>(new Set())
 
   const [stageEl, setStageEl] = useState<HTMLElement | null>(null)
   const [playerNotice, setPlayerNotice] = useState<PlayerNotice | null>(null)
@@ -128,7 +130,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const current = useMemo(() => getTrack(currentId) ?? null, [currentId])
   const isYouTube = current?.provider === 'youtube'
   const ytAudioSrc = isYouTube && current ? ytAudio[current.id] : undefined
-  const usesIframe = Boolean(isYouTube && !ytAudioSrc)
+  /** Faixa do YouTube cujo áudio ainda está a ser resolvido: nenhum motor deve tocar já. */
+  const ytAudioPending = Boolean(
+    isYouTube && current && !ytAudioSrc && !ytAudioFailed[current.id],
+  )
+  const usesIframe = Boolean(isYouTube && !ytAudioSrc && !ytAudioPending)
 
   const stateRef = useRef({ order, pos, repeat })
   stateRef.current = { order, pos, repeat }
@@ -272,24 +278,32 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (nativePlatform) {
       const track = current
-      const previous = nativeLoadedRef.current
       let cancelled = false
+
+      const stopAsset = async (assetId: string) => {
+        nativePlayingRef.current.delete(assetId)
+        await NativeAudio.stop({ assetId }).catch(() => {})
+        await NativeAudio.unload({ assetId }).catch(() => {})
+      }
+
+      // Só um áudio pode tocar: todos os outros assets são parados e libertados.
+      const silenceOthers = async (keep: string | null) => {
+        for (const assetId of Array.from(nativePlayingRef.current)) {
+          if (assetId !== keep) await stopAsset(assetId)
+        }
+      }
 
       const run = async () => {
         if (!track || usesIframe) {
-          if (previous) {
-            nativeLoadedRef.current = null
-            await NativeAudio.stop({ assetId: previous }).catch(() => {})
-          }
+          nativeLoadedRef.current = null
+          await silenceOthers(null)
           return
         }
         const src = ytAudioSrc ?? track.src
         if (!src) return
-        if (previous && previous !== track.id) {
-          nativeLoadedRef.current = null
-          await NativeAudio.stop({ assetId: previous }).catch(() => {})
-          await NativeAudio.unload({ assetId: previous }).catch(() => {})
-        }
+
+        await silenceOthers(track.id)
+
         if (nativeLoadedRef.current !== track.id) {
           await NativeAudio.preload({
             assetId: track.id,
@@ -307,6 +321,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           loadedIdRef.current = track.id
           setCurrentTime(0)
         }
+        nativePlayingRef.current.add(track.id)
         if (cancelled) return
         if (isPlaying) {
           await NativeAudio.play({ assetId: track.id }).catch(() => setIsPlaying(false))
@@ -323,7 +338,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
     const audio = audioRef.current
     if (!audio) return
-    if (!current || usesIframe) {
+    const src = current ? ytAudioSrc ?? current.src : ''
+    if (!current || usesIframe || !src) {
       audio.pause()
       audio.removeAttribute('src')
       loadedIdRef.current = null
@@ -332,7 +348,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     if (loadedIdRef.current !== current.id) {
       loadedIdRef.current = current.id
       setPlayerNotice(null)
-      audio.src = ytAudioSrc ?? current.src
+      audio.src = src
       setCurrentTime(0)
       setDuration(durations[current.id] ?? current.duration ?? 0)
     }
@@ -342,6 +358,18 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       audio.pause()
     }
   }, [current, isPlaying, durations, usesIframe, ytAudioSrc, nativePlatform])
+
+  // Se a faixa deixou de tocar no iframe (áudio resolvido ou outra faixa), o vídeo tem de calar.
+  useEffect(() => {
+    if (usesIframe) return
+    const player = ytPlayerRef.current
+    if (!player) return
+    try {
+      player.stopVideo?.()
+    } catch {
+      /* player indisponível */
+    }
+  }, [usesIframe, current])
 
   useEffect(() => {
     if (nativePlatform) {
