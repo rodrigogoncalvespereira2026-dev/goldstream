@@ -1,19 +1,28 @@
 import { useEffect, useState } from 'react'
+import { cx } from '../lib/format'
 import type { Track } from '../lib/catalog'
-import { fetchLyrics, type LyricsResult } from '../lib/lyrics'
+import { usePlayerTime } from '../lib/player'
+import { fetchLyrics, type LyricsResult, parseSyncedLyrics, getActiveLyricIndex, type SyncedLine } from '../lib/lyrics'
 
 /** Folha com a letra completa da faixa em curso. */
 export function LyricsSheet({ track, onClose }: { track: Track; onClose: () => void }) {
+  const { currentTime } = usePlayerTime()
   const [lyrics, setLyrics] = useState<LyricsResult | null>(null)
+  const [syncedLines, setSyncedLines] = useState<SyncedLine[]>([])
+  const [activeLineIndex, setActiveLineIndex] = useState(-1)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const controller = new AbortController()
     setLoading(true)
     setLyrics(null)
+    setSyncedLines([])
     void fetchLyrics(track, controller.signal)
       .then((result) => {
-        if (!controller.signal.aborted) setLyrics(result)
+        if (!controller.signal.aborted) {
+          setLyrics(result)
+          setSyncedLines(parseSyncedLyrics(result?.sync))
+        }
       })
       .catch(() => {})
       .finally(() => {
@@ -22,10 +31,19 @@ export function LyricsSheet({ track, onClose }: { track: Track; onClose: () => v
     return () => controller.abort()
   }, [track])
 
-  const paragraphs = (lyrics?.plain ?? '')
-    .split(/\n{2,}/)
-    .map((part) => part.trim())
-    .filter(Boolean)
+  // Atualiza a linha da letra ativa com base no tempo atual da música.
+  useEffect(() => {
+    if (!syncedLines.length || !currentTime) {
+      setActiveLineIndex(-1)
+      return
+    }
+    const idx = getActiveLyricIndex(syncedLines, currentTime)
+    setActiveLineIndex(idx)
+  }, [currentTime, syncedLines])
+
+  const plainLines = (lyrics?.plain ?? '')
+    .split('\n')
+    .filter((line) => line.trim())
 
   return (
     <div className="sheet-backdrop" onClick={onClose}>
@@ -44,15 +62,31 @@ export function LyricsSheet({ track, onClose }: { track: Track; onClose: () => v
 
         {loading && <p className="sheet-empty">A procurar a letra…</p>}
 
-        {!loading && !paragraphs.length && (
+        {!loading && !lyrics && (
           <p className="sheet-empty">Não encontrei a letra desta faixa. Pode ainda não estar na base de letras.</p>
         )}
 
-        {paragraphs.length > 0 && (
+        {lyrics && (
           <div className="lyrics-body">
-            {paragraphs.map((paragraph, index) => (
-              <p key={index}>{paragraph}</p>
-            ))}
+            {syncedLines.length ? (
+              syncedLines.map((line, index) => (
+                <p
+                  key={index}
+                  className={cx('lyrics-line', {
+                    'is-active': index === activeLineIndex,
+                    'is-passed': index < activeLineIndex,
+                  })}
+                >
+                  {line.text}
+                </p>
+              ))
+            ) : (
+              plainLines.map((line, index) => (
+                <p key={index} className="lyrics-line">
+                  {line}
+                </p>
+              ))
+            )}
           </div>
         )}
       </div>

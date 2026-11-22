@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { TouchEvent as ReactTouchEvent } from 'react'
 import { getAlbum, getTrack } from '../lib/catalog'
-import { fetchLyrics, type LyricsResult } from '../lib/lyrics'
+import { fetchLyrics, type LyricsResult, parseSyncedLyrics, getActiveLyricIndex, type SyncedLine } from '../lib/lyrics'
 import { cx, formatTime } from '../lib/format'
 import { usePlayer, usePlayerTime } from '../lib/player'
 import { CoverImage } from './CoverImage'
@@ -64,6 +64,8 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
   const [queueOpen, setQueueOpen] = useState(false)
   const [lyricsOpen, setLyricsOpen] = useState(false)
   const [lyrics, setLyrics] = useState<LyricsResult | null>(null)
+  const [syncedLines, setSyncedLines] = useState<SyncedLine[]>([])
+  const [activeLineIndex, setActiveLineIndex] = useState(-1)
   const [copied, setCopied] = useState(false)
 
   // A letra é pedida quando a música muda (só com o ecrã aberto, para não gastar dados à toa).
@@ -76,11 +78,24 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
     setLyrics(null)
     void fetchLyrics(current, controller.signal)
       .then((result) => {
-        if (!controller.signal.aborted) setLyrics(result)
+        if (!controller.signal.aborted) {
+          setLyrics(result)
+          setSyncedLines(parseSyncedLyrics(result?.sync))
+        }
       })
       .catch(() => {})
     return () => controller.abort()
   }, [open, current])
+
+  // Atualiza a linha da letra ativa com base no tempo atual da música.
+  useEffect(() => {
+    if (!syncedLines.length || !currentTime) {
+      setActiveLineIndex(-1)
+      return
+    }
+    const idx = getActiveLyricIndex(syncedLines, currentTime)
+    setActiveLineIndex(idx)
+  }, [currentTime, syncedLines])
 
   const share = async () => {
     if (!current) return
@@ -293,16 +308,34 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
             </div>
 
             {lyrics && (
-              <section className="np-lyrics">
-                <h3 className="np-lyrics-title">Pré-visualização das letras</h3>
+              <section className="np-lyrics-preview">
+                <h3 className="np-lyrics-preview-title">Prévia da letra</h3>
                 <div className="np-lyrics-body">
-                  {lyrics.plain
-                    .split('\n')
-                    .filter((line) => line.trim())
-                    .slice(0, 4)
-                    .map((line, index) => (
-                      <p key={index}>{line}</p>
-                    ))}
+                  {syncedLines.length ? (
+                    syncedLines
+                      .slice(0, 4)
+                      .map((line, index) => (
+                        <p
+                          key={index}
+                          className={cx('np-lyrics-line', {
+                            'is-active': index === activeLineIndex,
+                            'is-passed': index < activeLineIndex,
+                          })}
+                        >
+                          {line.text}
+                        </p>
+                      ))
+                  ) : (
+                    lyrics.plain
+                      .split('\n')
+                      .filter((line) => line.trim())
+                      .slice(0, 4)
+                      .map((line, index) => (
+                        <p key={index} className="np-lyrics-line">
+                          {line}
+                        </p>
+                      ))
+                  )}
                 </div>
                 <button type="button" className="np-lyrics-more" onClick={() => setLyricsOpen(true)}>
                   Mostrar letra

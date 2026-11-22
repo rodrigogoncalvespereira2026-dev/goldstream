@@ -48,6 +48,49 @@ const pickBest = (entries: LrclibEntry[], track: Track): LrclibEntry | null => {
   return valid.sort((a, b) => score(b) - score(a))[0] ?? null
 }
 
+export type SyncedLine = { time: number; text: string }
+
+/** Converte uma string de tempo LRC ([mm:ss.xx]) para segundos. */
+const lrcTimeToSeconds = (time: string): number => {
+  const [min, rest] = time.split(':')
+  const [sec, cent] = rest.split('.')
+  return (
+    Number(min) * 60 +
+    Number(sec) +
+    (cent ? Number(`0.${cent}`) : 0)
+  )
+}
+
+/**
+ * Parseia letras sincronizadas no formato LRC e retorna um array de linhas ordenadas por tempo.
+ * Formato esperado: [mm:ss.xx]texto da linha
+ */
+export const parseSyncedLyrics = (sync?: string): SyncedLine[] => {
+  if (!sync) return []
+  const lines: SyncedLine[] = []
+  for (const raw of sync.split('\n')) {
+    const match = raw.match(/^\[(\d{1,2}:\d{2}(?:\.\d{1,3})?)\](.*)$/)
+    if (match) {
+      lines.push({ time: lrcTimeToSeconds(match[1]), text: match[2].trim() })
+    }
+  }
+  return lines.sort((a, b) => a.time - b.time)
+}
+
+/**
+ * Dado o tempo atual em segundos, retorna o índice da linha que deve estar ativa.
+ * Retorna -1 se nenhuma linha estiver ativa ainda (ainda não chegou à primeira).
+ */
+export const getActiveLyricIndex = (lines: SyncedLine[], currentTime: number): number => {
+  if (!lines.length) return -1
+  let active = -1
+  for (let i = 0; i < lines.length; i++) {
+    if (currentTime >= lines[i].time) active = i
+    else break
+  }
+  return active
+}
+
 export async function fetchLyrics(track: Track, signal?: AbortSignal): Promise<LyricsResult | null> {
   const key = `${track.title}|${track.artist}`
   if (cache.has(key)) return cache.get(key) ?? null

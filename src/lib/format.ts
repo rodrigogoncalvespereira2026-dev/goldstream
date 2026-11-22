@@ -38,5 +38,16 @@ export const shuffleArray = <T,>(items: T[]): T[] => {
   return copy
 }
 
-export const cx = (...values: (string | false | null | undefined)[]): string =>
-  values.filter(Boolean).join(' ')
+export const cx = (...values: Array<string | false | null | undefined | Record<string, boolean>>): string => {
+  const classes: string[] = []
+  for (const value of values) {
+    if (typeof value === 'string') {
+      if (value) classes.push(value)
+    } else if (value && typeof value === 'object') {
+      for (const [key, included] of Object.entries(value)) {
+        if (included) classes.push(key)
+      }
+    }
+  }
+  return classes.join(' ')
+}
