@@ -66,6 +66,17 @@ export function TopBar({
 
       <button
         type="button"
+        className="user-chip profile-chip"
+        onClick={() => navigate({ type: 'profile' })}
+        aria-label="Abrir perfil"
+        title="Perfil"
+      >
+        <span className="avatar">{initialOf(profile.name)}</span>
+        <span className="user-name">{profile.name}</span>
+      </button>
+
+      <button
+        type="button"
         className="topbar-refresh"
         onClick={reloadApp}
         aria-label="Atualizar app"
@@ -73,19 +84,6 @@ export function TopBar({
       >
         <RefreshIcon size={20} />
       </button>
-
-      <div className="topbar-right">
-        <button
-          type="button"
-          className="user-chip"
-          onClick={() => navigate({ type: 'profile' })}
-          aria-label="Abrir perfil"
-          title="Perfil"
-        >
-          <span className="avatar">{initialOf(profile.name)}</span>
-          <span className="user-name">{profile.name}</span>
-        </button>
-      </div>
     </div>
   )
 }

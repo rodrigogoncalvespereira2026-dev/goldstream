@@ -2665,3 +2665,26 @@ img {
   font-size: 13px;
   color: var(--muted);
 }
+
+/* ---------------- Perfil ao lado da busca ---------------- */
+
+.user-chip.profile-chip {
+  flex: none;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+@media (max-width: 760px) {
+  .profile-chip {
+    padding: 3px;
+  }
+
+  .profile-chip .user-name {
+    display: none;
+  }
+
+  .search-field {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+  }
+}
