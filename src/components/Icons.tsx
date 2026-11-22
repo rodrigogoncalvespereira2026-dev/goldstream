@@ -191,6 +191,13 @@ export const DownloadIcon = ({ size = 24, ...rest }: IconProps) => (
   </svg>
 )
 
+export const VideoIcon = ({ size = 24, ...rest }: IconProps) => (
+  <svg {...base(size)} {...rest}>
+    <rect x="3" y="5" width="18" height="14" rx="3" />
+    <path d="m10.5 9.5 4.5 2.5-4.5 2.5z" />
+  </svg>
+)
+
 export const LogoMark = ({ size = 32 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true" focusable="false">
     <circle cx="16" cy="16" r="16" fill="currentColor" />

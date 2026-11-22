@@ -15,6 +15,7 @@ import {
   RepeatIcon,
   RepeatOneIcon,
   ShuffleIcon,
+  VideoIcon,
 } from './Icons'
 
 type NowPlayingProps = {
@@ -36,6 +37,7 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
     cycleRepeat,
     isLiked,
     toggleLike,
+    openWatch,
   } = usePlayer()
   const { currentTime, duration, seek } = usePlayerTime()
 
@@ -142,6 +144,13 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
                 <HeartIcon size={24} filled={liked} />
               </button>
             </div>
+
+            {current.provider === 'youtube' && current.videoId && (
+              <button type="button" className="np-watch" onClick={() => openWatch(current.videoId as string)}>
+                <VideoIcon size={17} />
+                Ver vídeo
+              </button>
+            )}
 
             <div className="np-progress">
               <Slider

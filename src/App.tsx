@@ -4,6 +4,7 @@ import { TopBar } from './components/TopBar'
 import { PlayerBar } from './components/PlayerBar'
 import { MobileNav } from './components/MobileNav'
 import { YouTubeStage } from './components/YouTubeStage'
+import { WatchVideo } from './components/WatchVideo'
 import { Home } from './pages/Home'
 import { Search } from './pages/Search'
 import { Library } from './pages/Library'
@@ -151,6 +152,7 @@ function Shell() {
       <PlayerBar />
       <MobileNav view={view} navigate={navigate} />
       <YouTubeStage />
+      <WatchVideo />
     </div>
   )
 }

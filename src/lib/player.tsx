@@ -41,6 +41,10 @@ type PlayerValue = {
   isLiked: (id: string) => boolean
   attachStage: (element: HTMLElement | null) => void
   playerNotice: PlayerNotice | null
+  /** Vídeo aberto no ecrã "Ver vídeo" (pausa o áudio enquanto está aberto). */
+  watchVideoId: string | null
+  openWatch: (videoId: string) => void
+  closeWatch: () => void
 }
 
 /** Estado que muda a cada tique do player: só quem mostra o tempo assina este contexto. */
@@ -777,6 +781,28 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   // O tempo muda a cada tique; mantê-lo fora deste contexto evita re-renderizar
   // listas, cards e o resto da página várias vezes por segundo.
+  // "Ver vídeo": o vídeo toca no YouTube e o áudio da app fica em pausa para não haver dois sons.
+  const [watchVideoId, setWatchVideoId] = useState<string | null>(null)
+  const resumeAfterWatch = useRef(false)
+
+  const openWatch = useCallback(
+    (videoId: string) => {
+      if (!videoId) return
+      resumeAfterWatch.current = isPlaying
+      setIsPlaying(false)
+      setWatchVideoId(videoId)
+    },
+    [isPlaying],
+  )
+
+  const closeWatch = useCallback(() => {
+    setWatchVideoId(null)
+    if (resumeAfterWatch.current) {
+      resumeAfterWatch.current = false
+      setIsPlaying(true)
+    }
+  }, [])
+
   const timeValue = useMemo<PlayerTimeValue>(
     () => ({ currentTime, duration: effectiveDuration, seek }),
     [currentTime, effectiveDuration, seek],
@@ -806,6 +832,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       isLiked,
       attachStage,
       playerNotice,
+      watchVideoId,
+      openWatch,
+      closeWatch,
     }),
     [
       current,
@@ -830,6 +859,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       isLiked,
       attachStage,
       playerNotice,
+      watchVideoId,
+      openWatch,
+      closeWatch,
     ],
   )
 

@@ -15,6 +15,7 @@ import {
   RepeatIcon,
   RepeatOneIcon,
   ShuffleIcon,
+  VideoIcon,
   VolumeIcon,
 } from './Icons'
 import { cx } from '../lib/format'
@@ -36,6 +37,7 @@ export function PlayerBar() {
     volume,
     isLiked,
     toggleLike,
+    openWatch,
   } = usePlayer()
   const { currentTime, duration, seek } = usePlayerTime()
   const isMobile = useMediaQuery('(max-width: 760px)')
@@ -88,6 +90,17 @@ export function PlayerBar() {
                   <span className="player-artist">{current.artist}</span>
                 </span>
               </button>
+              {current.provider === 'youtube' && current.videoId && (
+                <button
+                  type="button"
+                  className="icon-button player-watch"
+                  onClick={() => openWatch(current.videoId as string)}
+                  aria-label="Ver vídeo"
+                  title="Ver vídeo"
+                >
+                  <VideoIcon size={18} />
+                </button>
+              )}
               <button
                 type="button"
                 className={cx('icon-button', liked && 'is-liked')}

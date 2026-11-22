@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import type { Album, Playlist, Track } from '../lib/catalog'
 import { cx, formatTime, plural } from '../lib/format'
 import { usePlayer } from '../lib/player'
-import { HeartIcon, PauseIcon, PlayIcon } from './Icons'
+import { HeartIcon, PauseIcon, PlayIcon, VideoIcon } from './Icons'
 import { CoverImage } from './CoverImage'
 
 type MediaCardProps = {
@@ -100,7 +100,7 @@ type TrackRowProps = {
 }
 
 export function TrackRow({ track, index, onPlay, showCover, showAlbum = true }: TrackRowProps) {
-  const { current, isPlaying, toggleLike, isLiked, durations } = usePlayer()
+  const { current, isPlaying, toggleLike, isLiked, durations, openWatch } = usePlayer()
   const active = current?.id === track.id
   const liked = isLiked(track.id)
   const length = durations[track.id] ?? track.duration
@@ -156,7 +156,22 @@ export function TrackRow({ track, index, onPlay, showCover, showAlbum = true }: 
         <HeartIcon size={17} filled={liked} />
       </button>
 
-      <div className="track-duration">{length ? formatTime(length) : '–:––'}</div>
+      <div className="track-duration">
+        {track.provider === 'youtube' && track.videoId && (
+          <button
+            type="button"
+            className="track-video"
+            aria-label={`Ver vídeo de ${track.title}`}
+            onClick={(event) => {
+              event.stopPropagation()
+              openWatch(track.videoId as string)
+            }}
+          >
+            <VideoIcon size={15} />
+          </button>
+        )}
+        <span>{length ? formatTime(length) : '–:––'}</span>
+      </div>
     </div>
   )
 }
