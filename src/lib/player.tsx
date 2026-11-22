@@ -102,6 +102,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const nativeLoadedRef = useRef<string | null>(null)
   /** Assets do motor nativo que ainda estão carregados (têm de ser calados ao trocar). */
   const nativePlayingRef = useRef<Set<string>>(new Set())
+  /** Fila do motor nativo: impede dois preload/play ao mesmo tempo para a mesma faixa. */
+  const nativeQueueRef = useRef<Promise<void>>(Promise.resolve())
 
   const [stageEl, setStageEl] = useState<HTMLElement | null>(null)
   const [playerNotice, setPlayerNotice] = useState<PlayerNotice | null>(null)
@@ -180,6 +182,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   // ---------- motor 1: elemento de áudio (Audius, Apple, catálogo local) ----------
   useEffect(() => {
+    // No telemóvel o som sai do motor nativo: um <audio> aqui tocava em duplicado.
+    if (nativePlatform) return
     const audio = new Audio()
     audio.preload = 'auto'
     audioRef.current = audio
@@ -330,7 +334,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      void run()
+      nativeQueueRef.current = nativeQueueRef.current.then(run).catch(() => {})
       return () => {
         cancelled = true
       }
@@ -396,9 +400,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     if (audio) audio.muted = muted
   }, [muted])
 
-  // ---------- motor 2: player do YouTube ----------
+  // ---------- motor 2: player do YouTube (só quando não há áudio direto) ----------
   useEffect(() => {
-    if (!stageEl) return
+    if (!stageEl || !usesIframe) return
     let cancelled = false
 
     const boot = async () => {
@@ -438,7 +442,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         ...(startVideo ? { videoId: startVideo } : {}),
         events: {
           onReady: (event) => {
-            if (cancelled || currentRef.current?.provider !== 'youtube') return
+            if (cancelled || currentRef.current?.provider !== 'youtube' || !usesIframeRef.current) return
             const instance = event.target
             const track = currentRef.current
             setPlayerNotice(null)
@@ -460,7 +464,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
             startYtTimer(instance)
           },
           onStateChange: (event) => {
-            if (cancelled || currentRef.current?.provider !== 'youtube') return
+            if (cancelled || currentRef.current?.provider !== 'youtube' || !usesIframeRef.current) return
             const state = event.data
             if (state === 1) {
               setIsPlaying(true)
@@ -509,11 +513,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         /* iframe já removido */
       }
     }
-  }, [stageEl, startYtTimer, stopYtTimer])
+  }, [stageEl, usesIframe, startYtTimer, stopYtTimer])
 
-  // Troca o vídeo quando a faixa atual muda.
+  // Troca o vídeo quando a faixa atual muda (só no modo iframe).
   useEffect(() => {
-    if (!isYouTube || !current?.videoId || ytAudioSrc) return
+    if (!usesIframe || !current?.videoId) return
     setPlayerNotice(null)
     setCurrentTime(0)
     setDuration(current.duration ?? 0)
@@ -527,7 +531,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     } catch {
       /* ignore */
     }
-  }, [current, isYouTube, ytAudioSrc])
+  }, [current, usesIframe])
 
   // Play/pause do YouTube segue o estado compartilhado.
   useEffect(() => {
