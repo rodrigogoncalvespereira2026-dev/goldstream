@@ -180,6 +180,50 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const usesIframeRef = useRef(usesIframe)
   usesIframeRef.current = usesIframe
   const endedRef = useRef<() => void>(() => {})
+  /** O que o utilizador pediu (tocar/parar). Os eventos do motor não contrariam isto. */
+  const intentRef = useRef({ play: false, at: 0 })
+
+  const setIntent = useCallback((play: boolean) => {
+    intentRef.current = { play, at: Date.now() }
+    setIsPlaying(play)
+  }, [])
+
+  /** Manda o motor ativo calar/tocar já, sem esperar por efeitos nem pela fila. */
+  const applyPlaybackNow = useCallback(
+    (play: boolean) => {
+      if (nativePlatform) {
+        if (usesIframeRef.current) return
+        if (play) {
+          const assetId = nativeLoadedRef.current
+          if (assetId) {
+            void NativeAudio.resume({ assetId }).catch(() =>
+              NativeAudio.play({ assetId }).catch(() => {}),
+            )
+          }
+          return
+        }
+        const targets = new Set(nativePlayingRef.current)
+        if (nativeLoadedRef.current) targets.add(nativeLoadedRef.current)
+        targets.forEach((assetId) => {
+          void NativeAudio.pause({ assetId }).catch(() => {})
+        })
+        return
+      }
+
+      const audio = audioRef.current
+      if (audio) {
+        if (play) void audio.play().catch(() => {})
+        else audio.pause()
+      }
+      try {
+        if (play) ytPlayerRef.current?.playVideo?.()
+        else ytPlayerRef.current?.pauseVideo?.()
+      } catch {
+        /* player ainda não existe */
+      }
+    },
+    [nativePlatform],
+  )
 
   const stopYtTimer = useCallback(() => {
     if (ytTimerRef.current !== null) {
@@ -227,7 +271,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       if (!usesIframeRef.current) setIsPlaying(true)
     }
     const onPause = () => {
-      if (!usesIframeRef.current) setIsPlaying(false)
+      if (usesIframeRef.current) return
+      // A pausa que o próprio elemento dispara ao trocar de src não pode anular a
+      // intenção do utilizador (era isto que impedia a música de começar/trocar).
+      if (intentRef.current.play) return
+      setIsPlaying(false)
     }
     const onVolume = () => setMuted(audio.muted)
     const onError = () => {
@@ -291,20 +339,39 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         if (disposed || usesIframeRef.current) return
         const assetId = event.assetId
         if (!assetId) return
-        const index = stateRef.current.order.indexOf(assetId)
-        if (index < 0) return
+        const { order: list, pos: index } = stateRef.current
+        const appTrackId = index >= 0 ? list[index] : undefined
+        const advanced = assetId !== appTrackId
+        if (!advanced) {
+          // Só confirma a faixa que já estava escolhida; não mexe na pausa.
+          if (intentRef.current.play) setIsPlaying(true)
+          return
+        }
+        const nextIndex = list.indexOf(assetId)
+        if (nextIndex < 0) return
         nativeLoadedRef.current = assetId
         nativeAdvancedRef.current = assetId
-        setPos(index)
-        setIsPlaying(true)
+        nativePlayingRef.current.add(assetId)
+        setPos(nextIndex)
         setCurrentTime(0)
         addRecentRef.current(assetId)
+        if (intentRef.current.play || event.reason !== 'setQueue') setIsPlaying(true)
       })
       const stateListener = await NativeAudio.addListener('playbackState', (event) => {
         if (disposed || usesIframeRef.current) return
         if (typeof event.currentTime === 'number') setCurrentTime(event.currentTime)
         if (typeof event.duration === 'number' && event.duration > 0) setDuration(event.duration)
-        setIsPlaying(event.isPlaying)
+        // Só aceitar o estado do motor quando concorda com o pedido do utilizador ou
+        // quando vem do aviso/casaco (remotePlay/remotePause). Isso evita que um
+        // "playing" atrasado volte a arrancar a música depois de carregar em pausa.
+        const remote = (event.reason ?? '').startsWith('remote')
+        if (remote) {
+          // Aviso/casaco/auscultadores: o pedido passa a ser este.
+          intentRef.current = { play: event.isPlaying, at: Date.now() }
+          setIsPlaying(event.isPlaying)
+        } else if (event.isPlaying === intentRef.current.play) {
+          setIsPlaying(event.isPlaying)
+        }
       })
       cleanups.push(
         () => void timeListener.remove(),
@@ -339,6 +406,15 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         }
       }
 
+      // Pausa tudo o que esteve a tocar (sem descarregar, para poder retomar).
+      const silenceAll = async () => {
+        const targets = new Set(nativePlayingRef.current)
+        if (nativeLoadedRef.current) targets.add(nativeLoadedRef.current)
+        for (const assetId of targets) {
+          await NativeAudio.pause({ assetId }).catch(() => {})
+        }
+      }
+
       const run = async () => {
         if (!track || usesIframe) {
           nativeLoadedRef.current = null
@@ -349,11 +425,19 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           return
         }
 
-        // A fila nativa arrancou esta faixa sozinha: só acertar o estado da app.
+        // A fila nativa arrancou esta faixa sozinha (passou de faixa): só acertar o estado.
         if (nativeAdvancedRef.current === track.id) {
           nativeAdvancedRef.current = null
           nativeLoadedRef.current = track.id
+          nativePlayingRef.current.add(track.id)
           setCurrentTime(0)
+          if (isPlaying) return
+        }
+
+        // Carregou em pausa: cala tudo o que estiver carregado, mesmo que a fila
+        // ainda não tenha chegado a esta faixa.
+        if (!isPlaying) {
+          await silenceAll()
           return
         }
 
@@ -362,13 +446,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
         nativePlayingRef.current.add(track.id)
         if (cancelled) return
-        if (isPlaying) {
-          await NativeAudio.resume({ assetId: track.id }).catch(() =>
-            NativeAudio.play({ assetId: track.id }).catch(() => {}),
-          )
-        } else {
-          await NativeAudio.pause({ assetId: track.id }).catch(() => {})
-        }
+        await NativeAudio.resume({ assetId: track.id }).catch(() =>
+          NativeAudio.play({ assetId: track.id }).catch(() => {}),
+        )
       }
 
       nativeQueueRef.current = nativeQueueRef.current.then(run).catch(() => {})
@@ -439,6 +519,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         startIndex: 0,
         autoPlay: isPlayingRef.current,
       }).catch(() => {})
+
+      // Se carregou em pausa enquanto a faixa carregava, o setQueue pode já ter
+      // arrancado: volta a calar. Sem isto a música "não parava".
+      if (!intentRef.current.play) {
+        await NativeAudio.pause({ assetId: current.id }).catch(() => {})
+      }
 
       // Vai preparando as seguintes: 14 faixas garantem horas de música sem JS.
       for (const id of ids.slice(startIndex + 1)) {
@@ -569,13 +655,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
             if (cancelled || currentRef.current?.provider !== 'youtube' || !usesIframeRef.current) return
             const state = event.data
             if (state === 1) {
-              setIsPlaying(true)
+              if (intentRef.current.play) setIsPlaying(true)
               startYtTimer(event.target)
             } else if (state === 2) {
-              setIsPlaying(false)
+              if (!intentRef.current.play) setIsPlaying(false)
               stopYtTimer()
             } else if (state === 3) {
-              setIsPlaying(true)
+              if (intentRef.current.play) setIsPlaying(true)
             } else if (state === 0) {
               stopYtTimer()
               setCurrentTime(0)
@@ -723,10 +809,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       setContextQueue([...ids])
       setOrder(nextOrder)
       setPos(nextOrder.indexOf(first))
-      setIsPlaying(true)
+      setIntent(true)
       addRecent(first)
     },
-    [shuffle, addRecent],
+    [shuffle, addRecent, setIntent],
   )
 
   const playTrack = useCallback(
@@ -734,13 +820,15 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       const track = getTrack(id)
       if (!track) return
       if (currentId === id) {
-        setIsPlaying((playing) => !playing)
+        const next = !intentRef.current.play
+        setIntent(next)
+        applyPlaybackNow(next)
         return
       }
       const album = ALBUMS.find((item) => item.id === track.albumId)
       playQueue(album ? album.trackIds : [id], id)
     },
-    [currentId, playQueue],
+    [currentId, playQueue, setIntent, applyPlaybackNow],
   )
 
   const toggle = useCallback(() => {
@@ -751,14 +839,17 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       )
       return
     }
-    setIsPlaying((playing) => !playing)
-  }, [current, playQueue])
+    const next = !intentRef.current.play
+    setIntent(next)
+    applyPlaybackNow(next)
+  }, [current, playQueue, setIntent, applyPlaybackNow])
 
   const step = useCallback(
     (direction: 1 | -1, auto = false) => {
       // Com a fila nativa quem manda é o ExoPlayer: pedimos-lhe para avançar ou recuar,
       // para as transições funcionarem também com o ecrã bloqueado.
       if (!auto && nativeQueueActiveRef.current) {
+        setIntent(true)
         void (direction > 0 ? NativeAudio.queueNext() : NativeAudio.queuePrevious()).catch(() => {})
         return
       }
@@ -767,18 +858,18 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       let nextIndex = index + direction
       if (nextIndex >= list.length) {
         if (auto && mode === 'off') {
-          setIsPlaying(false)
+          setIntent(false)
           return
         }
         nextIndex = 0
       }
       if (nextIndex < 0) nextIndex = list.length - 1
       setPos(nextIndex)
-      if (!auto) setIsPlaying(true)
+      if (!auto) setIntent(true)
       const nextId = list[nextIndex]
       if (nextId) addRecent(nextId)
     },
-    [addRecent],
+    [addRecent, setIntent],
   )
 
   const next = useCallback(() => step(1), [step])
@@ -920,20 +1011,22 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const openWatch = useCallback(
     (videoId: string) => {
       if (!videoId) return
-      resumeAfterWatch.current = isPlaying
-      setIsPlaying(false)
+      resumeAfterWatch.current = intentRef.current.play
+      setIntent(false)
+      applyPlaybackNow(false)
       setWatchVideoId(videoId)
     },
-    [isPlaying],
+    [setIntent, applyPlaybackNow],
   )
 
   const closeWatch = useCallback(() => {
     setWatchVideoId(null)
     if (resumeAfterWatch.current) {
       resumeAfterWatch.current = false
-      setIsPlaying(true)
+      setIntent(true)
+      applyPlaybackNow(true)
     }
-  }, [])
+  }, [setIntent, applyPlaybackNow])
 
   const timeValue = useMemo<PlayerTimeValue>(
     () => ({ currentTime, duration: effectiveDuration, seek }),
