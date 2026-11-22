@@ -301,6 +301,45 @@ type PipedSearchItem = {
 const PIPED_HOSTS = ['api.piped.private.coffee', 'pipedapi.ducks.party']
 const WATCH_ID = /[?&]v=([a-zA-Z0-9_-]{11})/
 
+/* ---------------- áudio direto (para tocar em segundo plano) ---------------- */
+
+type PipedAudioStream = { url?: string; mimeType?: string; bitrate?: number }
+type PipedStreamsPayload = { audioStreams?: PipedAudioStream[] }
+
+const audioStreamCache = new Map<string, string>()
+
+/**
+ * Devolve um URL de áudio progressivo do vídeo. Com ele a faixa toca no player nativo do
+ * sistema, que continua com o ecrã bloqueado — o iframe do YouTube pausa quando a app sai
+ * de primeiro plano.
+ */
+export async function resolveYouTubeAudio(
+  videoId: string,
+  signal?: AbortSignal,
+): Promise<string | null> {
+  const cached = audioStreamCache.get(videoId)
+  if (cached) return cached
+
+  for (const host of PIPED_HOSTS) {
+    try {
+      const response = await fetch(`https://${host}/streams/${videoId}`, { signal })
+      if (!response.ok) continue
+      const payload = (await response.json()) as PipedStreamsPayload
+      const streams = (payload.audioStreams ?? []).filter((item) => Boolean(item.url))
+      if (!streams.length) continue
+      streams.sort((a, b) => (b.bitrate ?? 0) - (a.bitrate ?? 0))
+      const url = streams[0].url
+      if (!url) continue
+      audioStreamCache.set(videoId, url)
+      return url
+    } catch (error) {
+      if (signal?.aborted) throw error
+    }
+  }
+
+  return null
+}
+
 const trackFromPiped = (item: PipedSearchItem): Track | null => {
   if (item.type && item.type !== 'stream') return null
   const videoId = WATCH_ID.exec(item.url ?? '')?.[1]

@@ -10,7 +10,8 @@ import {
 } from 'react'
 import { ALBUMS, TRACKS, getTrack, registerTracks, type Track } from './catalog'
 import { shuffleArray } from './format'
-import { getYT, loadYouTubeApi, type YTPlayer } from './youtube'
+import { getYT, loadYouTubeApi, resolveYouTubeAudio, type YTPlayer } from './youtube'
+import { bindSessionHandlers, publishPosition, publishState, publishTrack } from './mediaSession'
 
 type RepeatMode = 'off' | 'all' | 'one'
 
@@ -114,10 +115,16 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [repeat, setRepeat] = useState<RepeatMode>('off')
   const [liked, setLiked] = useState<string[]>(() => readArray<string>(KEYS.liked))
   const [recent, setRecent] = useState<string[]>(() => readArray<string>(KEYS.recent))
+  // Faixas do YouTube com áudio direto: tocam no elemento de áudio e sobrevivem ao
+  // ecrã bloqueado. Sem URL, cai para o iframe (que pausa fora de primeiro plano).
+  const [ytAudio, setYtAudio] = useState<Record<string, string>>({})
+  const [ytAudioFailed, setYtAudioFailed] = useState<Record<string, boolean>>({})
 
   const currentId = pos >= 0 ? order[pos] : undefined
   const current = useMemo(() => getTrack(currentId) ?? null, [currentId])
   const isYouTube = current?.provider === 'youtube'
+  const ytAudioSrc = isYouTube && current ? ytAudio[current.id] : undefined
+  const usesIframe = Boolean(isYouTube && !ytAudioSrc)
 
   const stateRef = useRef({ order, pos, repeat })
   stateRef.current = { order, pos, repeat }
@@ -131,6 +138,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   isPlayingRef.current = isPlaying
   const currentTimeRef = useRef(currentTime)
   currentTimeRef.current = currentTime
+  const durationRef = useRef(duration)
+  durationRef.current = duration
+  const usesIframeRef = useRef(usesIframe)
+  usesIframeRef.current = usesIframe
   const endedRef = useRef<() => void>(() => {})
 
   const stopYtTimer = useCallback(() => {
@@ -174,10 +185,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     // Quando a faixa atual é do YouTube, o áudio é pausado de propósito: esses eventos
     // não podem mexer no isPlaying, que agora pertence ao outro motor.
     const onPlay = () => {
-      if (currentRef.current?.provider !== 'youtube') setIsPlaying(true)
+      if (!usesIframeRef.current) setIsPlaying(true)
     }
     const onPause = () => {
-      if (currentRef.current?.provider !== 'youtube') setIsPlaying(false)
+      if (!usesIframeRef.current) setIsPlaying(false)
     }
     const onVolume = () => setMuted(audio.muted)
     const onError = () => {
@@ -216,7 +227,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const audio = audioRef.current
     if (!audio) return
-    if (!current || current.provider === 'youtube') {
+    if (!current || usesIframe) {
       audio.pause()
       audio.removeAttribute('src')
       loadedIdRef.current = null
@@ -225,7 +236,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     if (loadedIdRef.current !== current.id) {
       loadedIdRef.current = current.id
       setPlayerNotice(null)
-      audio.src = current.src
+      audio.src = ytAudioSrc ?? current.src
       setCurrentTime(0)
       setDuration(durations[current.id] ?? current.duration ?? 0)
     }
@@ -234,7 +245,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     } else {
       audio.pause()
     }
-  }, [current, isPlaying, durations])
+  }, [current, isPlaying, durations, usesIframe, ytAudioSrc])
 
   useEffect(() => {
     const audio = audioRef.current
@@ -368,7 +379,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   // Troca o vídeo quando a faixa atual muda.
   useEffect(() => {
-    if (!isYouTube || !current?.videoId) return
+    if (!isYouTube || !current?.videoId || ytAudioSrc) return
     setPlayerNotice(null)
     setCurrentTime(0)
     setDuration(current.duration ?? 0)
@@ -382,11 +393,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     } catch {
       /* ignore */
     }
-  }, [current, isYouTube])
+  }, [current, isYouTube, ytAudioSrc])
 
   // Play/pause do YouTube segue o estado compartilhado.
   useEffect(() => {
-    if (!isYouTube) return
+    if (!usesIframe) return
     const player = ytPlayerRef.current
     if (!player) return
     try {
@@ -395,7 +406,30 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     } catch {
       /* ignore */
     }
-  }, [isPlaying, isYouTube, stageEl])
+  }, [isPlaying, usesIframe, stageEl])
+
+  // Faixas do YouTube: resolve o áudio direto para continuarem a tocar fora da app.
+  useEffect(() => {
+    if (current?.provider !== 'youtube' || !current.videoId) return
+    const videoId = current.videoId
+    const id = current.id
+    if (ytAudio[id] || ytAudioFailed[id]) return
+    const controller = new AbortController()
+
+    resolveYouTubeAudio(videoId, controller.signal)
+      .then((url) => {
+        if (controller.signal.aborted) return
+        if (url) setYtAudio((prev) => (prev[id] ? prev : { ...prev, [id]: url }))
+        else setYtAudioFailed((prev) => (prev[id] ? prev : { ...prev, [id]: true }))
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setYtAudioFailed((prev) => (prev[id] ? prev : { ...prev, [id]: true }))
+        }
+      })
+
+    return () => controller.abort()
+  }, [current, ytAudio, ytAudioFailed])
 
   useEffect(() => store(KEYS.liked, liked), [liked])
   useEffect(() => store(KEYS.recent, recent), [recent])
@@ -503,8 +537,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const next = useCallback(() => step(1), [step])
 
   const seek = useCallback((seconds: number) => {
-    const track = currentRef.current
-    if (track?.provider === 'youtube') {
+    if (usesIframeRef.current) {
       try {
         ytPlayerRef.current?.seekTo?.(seconds, true)
       } catch {
@@ -565,7 +598,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const handleEnded = useCallback(() => {
     const { repeat: mode } = stateRef.current
     if (mode === 'one') {
-      if (currentRef.current?.provider === 'youtube') {
+      if (usesIframeRef.current) {
         try {
           ytPlayerRef.current?.seekTo?.(0, true)
           ytPlayerRef.current?.playVideo?.()
@@ -587,6 +620,34 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     endedRef.current = handleEnded
   }, [handleEnded])
+
+  // Controles da notificação e do ecrã bloqueado (play, pause, seguinte, anterior, seek).
+  useEffect(() => {
+    void bindSessionHandlers({
+      play: () => setIsPlaying(true),
+      pause: () => setIsPlaying(false),
+      next,
+      prev,
+      seek,
+    })
+  }, [next, prev, seek])
+
+  useEffect(() => {
+    void publishTrack(current)
+  }, [current])
+
+  useEffect(() => {
+    void publishState(isPlaying)
+  }, [isPlaying, current])
+
+  useEffect(() => {
+    if (!current) return
+    const tick = () => void publishPosition(currentTimeRef.current, durationRef.current)
+    tick()
+    if (!isPlaying) return
+    const timer = window.setInterval(tick, 1000)
+    return () => window.clearInterval(timer)
+  }, [current, isPlaying])
 
   const effectiveDuration =
     duration ||
