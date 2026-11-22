@@ -1668,32 +1668,64 @@ img {
   transform: translateX(-50%);
 }
 
-/* Estilo moderno para o botão de repetir */
+/* Estilo Spotify para o botão de repetir */
 .player-repeat {
   background: transparent;
-  transition: all 0.15s ease;
+  border: none;
+  cursor: pointer;
+  padding: 12px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #b3b3b3;
+  transition: color 0.2s ease, transform 0.1s ease;
 }
 
 .player-repeat:hover {
-  color: var(--text);
-  transform: translateY(-1px);
+  color: #ffffff;
+  transform: scale(1.06);
 }
 
 .player-repeat:active {
-  transform: scale(0.92);
+  transform: scale(0.96);
 }
 
+/* Estado ativo (Verde Spotify) */
 .player-repeat.is-on {
-  color: var(--accent);
+  color: #1ed760;
 }
 
-.player-repeat.is-on:hover {
-  color: var(--accent);
-  transform: translateY(-1px);
+/* Ponto verde indicador por baixo do ícone quando ativo */
+.player-repeat.is-on::after {
+  content: '';
+  position: absolute;
+  bottom: 4px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background-color: #1ed760;
 }
 
-.player-repeat.is-on:active {
-  transform: scale(0.92);
+/* Badge com "1" para o modo de repetir uma faixa */
+.repeat-badge {
+  position: absolute;
+  font-size: 9px;
+  font-weight: 800;
+  background-color: #1ed760;
+  color: #121212;
+  border-radius: 50%;
+  width: 13px;
+  height: 13px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  top: 6px;
+  right: 6px;
+}
+
+.player-repeat.repeat-one .repeat-badge {
+  display: flex;
 }
 
 .play-circle {

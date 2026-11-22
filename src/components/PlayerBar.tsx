@@ -160,7 +160,7 @@ export function PlayerBar() {
           </button>
           <button
             type="button"
-            className={cx('icon-button', 'player-repeat', repeat !== 'off' && 'is-on')}
+            className={cx('icon-button', 'player-repeat', repeat !== 'off' && 'is-on', repeat === 'one' && 'repeat-one')}
             onClick={cycleRepeat}
             aria-label={
               repeat === 'one'
@@ -175,6 +175,7 @@ export function PlayerBar() {
             }
           >
             {repeat === 'one' ? <RepeatOneIcon size={19} /> : <RepeatIcon size={19} />}
+            <span className="repeat-badge">1</span>
           </button>
         </div>
 
