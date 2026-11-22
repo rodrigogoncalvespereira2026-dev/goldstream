@@ -4,7 +4,8 @@ import { CoverImage } from '../components/CoverImage'
 import { HeartIcon, PlayIcon } from '../components/Icons'
 import { greeting } from '../lib/format'
 import { usePlayer } from '../lib/player'
-import { initialOf, useProfile } from '../lib/profile'
+import { useProfile } from '../lib/profile'
+import { Avatar } from '../components/Avatar'
 import type { Navigate } from '../lib/nav'
 
 /** Cartões de descoberta: cada um abre a busca já com o tema escolhido. */
@@ -70,7 +71,7 @@ export function Home({ navigate }: { navigate: Navigate }) {
           onClick={() => navigate({ type: 'profile' })}
           aria-label="Abrir perfil"
         >
-          <span className="avatar">{initialOf(profile.name)}</span>
+          <Avatar name={profile.name} photo={profile.photo} />
           <span>{profile.name}</span>
         </button>
       </div>

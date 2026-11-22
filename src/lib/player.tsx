@@ -13,6 +13,7 @@ import { NativeAudio } from '@capgo/capacitor-native-audio'
 import { ALBUMS, TRACKS, getTrack, registerTracks, type Track } from './catalog'
 import { shuffleArray } from './format'
 import { getYT, loadYouTubeApi, resolveYouTubeAudio, type YTPlayer } from './youtube'
+import { addListening, addPlay } from './stats'
 
 type RepeatMode = 'off' | 'all' | 'one'
 
@@ -879,6 +880,32 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     endedRef.current = handleEnded
   }, [handleEnded])
 
+
+  // Estatísticas: soma os segundos realmente a tocar e conta a reprodução
+  // depois de 20 s da mesma faixa (saltar de faixa não conta).
+  const countedRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!isPlaying || !currentId) return
+    let last = Date.now()
+    let played = 0
+    const tick = () => {
+      const now = Date.now()
+      const delta = Math.min((now - last) / 1000, 30)
+      last = now
+      if (!Number.isFinite(delta) || delta <= 0) return
+      played += delta
+      addListening(currentId, delta)
+      if (played >= 20 && countedRef.current !== currentId) {
+        countedRef.current = currentId
+        addPlay(currentId)
+      }
+    }
+    const timer = window.setInterval(tick, 5000)
+    return () => {
+      tick()
+      window.clearInterval(timer)
+    }
+  }, [isPlaying, currentId])
 
   const effectiveDuration =
     duration ||

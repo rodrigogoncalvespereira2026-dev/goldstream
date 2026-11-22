@@ -2,7 +2,8 @@ import { ArrowLeftIcon, ArrowRightIcon, RefreshIcon, SearchIcon } from './Icons'
 import type { Navigate } from '../lib/nav'
 import { cx } from '../lib/format'
 import { reloadApp } from '../lib/update'
-import { initialOf, useProfile } from '../lib/profile'
+import { useProfile } from '../lib/profile'
+import { Avatar } from './Avatar'
 
 type TopBarProps = {
   navigate: Navigate
@@ -71,7 +72,7 @@ export function TopBar({
         aria-label="Abrir perfil"
         title="Perfil"
       >
-        <span className="avatar">{initialOf(profile.name)}</span>
+        <Avatar name={profile.name} photo={profile.photo} />
         <span className="user-name">{profile.name}</span>
       </button>
 
