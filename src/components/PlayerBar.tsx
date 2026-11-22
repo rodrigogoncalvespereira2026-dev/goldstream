@@ -78,10 +78,18 @@ export function PlayerBar() {
               </button>
             </>
           ) : (
-            <div className="player-empty">
-              <span className="player-empty-title">Nada tocando</span>
-              <span className="player-empty-sub">Escolha uma música para começar</span>
-            </div>
+            <button
+              type="button"
+              className="player-open"
+              onClick={() => isMobile && setExpanded(true)}
+              tabIndex={isMobile ? 0 : -1}
+              aria-label={isMobile ? 'Abrir player' : undefined}
+            >
+              <span className="player-empty">
+                <span className="player-empty-title">Nada tocando</span>
+                <span className="player-empty-sub">Escolha uma música para começar</span>
+              </span>
+            </button>
           )}
         </div>
 
