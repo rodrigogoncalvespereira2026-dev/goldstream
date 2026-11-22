@@ -2502,3 +2502,166 @@ img {
 .icon-button.is-busy {
   opacity: 0.6;
 }
+
+/* ---------------- Perfil ---------------- */
+
+.home-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.home-avatar {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 14px 4px 4px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.home-avatar .avatar {
+  width: 30px;
+  height: 30px;
+}
+
+.profile-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 8px 0 26px;
+}
+
+.profile-avatar {
+  width: 88px;
+  height: 88px;
+  flex: none;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(140deg, #1ed760, #0b6b34);
+  color: #06140c;
+  font-size: 34px;
+  font-weight: 800;
+}
+
+.profile-kicker {
+  margin-bottom: 2px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.profile-name {
+  font-size: clamp(24px, 4vw, 38px);
+  line-height: 1.15;
+}
+
+.profile-sub {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.profile-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.profile-form input {
+  flex: 1 1 220px;
+  min-width: 0;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid #3e3e3e;
+  background: #1c1c1c;
+  color: var(--text);
+  font: inherit;
+}
+
+.profile-form input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.stat-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px;
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.stat-card strong {
+  font-size: 26px;
+  line-height: 1;
+}
+
+.stat-card span {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.profile-links {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.profile-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.profile-link:hover {
+  background: #262626;
+}
+
+.profile-link > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.profile-link strong {
+  font-size: 15px;
+}
+
+.profile-link small {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.profile-empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}

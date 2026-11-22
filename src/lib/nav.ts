@@ -3,6 +3,7 @@ export type View =
   | { type: 'search'; query?: string }
   | { type: 'library' }
   | { type: 'settings' }
+  | { type: 'profile' }
   | { type: 'album'; id: string }
   | { type: 'playlist'; id: string }
   | { type: 'liked' }

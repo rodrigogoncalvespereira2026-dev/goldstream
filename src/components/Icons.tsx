@@ -191,6 +191,13 @@ export const DownloadIcon = ({ size = 24, ...rest }: IconProps) => (
   </svg>
 )
 
+export const UserIcon = ({ size = 24, ...rest }: IconProps) => (
+  <svg {...base(size)} {...rest}>
+    <circle cx="12" cy="8.5" r="3.6" />
+    <path d="M5 20c0-3.2 3.1-5.2 7-5.2s7 2 7 5.2" />
+  </svg>
+)
+
 export const RadioIcon = ({ size = 24, ...rest }: IconProps) => (
   <svg {...base(size)} {...rest}>
     <circle cx="12" cy="12" r="2.4" />

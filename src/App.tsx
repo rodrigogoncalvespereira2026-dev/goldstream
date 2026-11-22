@@ -9,6 +9,7 @@ import { Home } from './pages/Home'
 import { Search } from './pages/Search'
 import { Library } from './pages/Library'
 import { Settings } from './pages/Settings'
+import { Profile } from './pages/Profile'
 import { Collection } from './pages/Collection'
 import { PlayerProvider, usePlayer } from './lib/player'
 import { GENRES, getAlbum, getPlaylist } from './lib/catalog'
@@ -111,6 +112,8 @@ function Shell() {
         return <Library navigate={navigate} />
       case 'settings':
         return <Settings />
+      case 'profile':
+        return <Profile navigate={navigate} />
       case 'album':
       case 'playlist':
       case 'liked':

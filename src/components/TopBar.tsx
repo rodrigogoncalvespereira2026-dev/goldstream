@@ -2,6 +2,7 @@ import { ArrowLeftIcon, ArrowRightIcon, RefreshIcon, SearchIcon } from './Icons'
 import type { Navigate } from '../lib/nav'
 import { cx } from '../lib/format'
 import { reloadApp } from '../lib/update'
+import { initialOf, useProfile } from '../lib/profile'
 
 type TopBarProps = {
   navigate: Navigate
@@ -24,6 +25,8 @@ export function TopBar({
   onForward,
   scrolled,
 }: TopBarProps) {
+  const [profile] = useProfile()
+
   return (
     <div className={cx('topbar', scrolled && 'is-scrolled')}>
       <div className="nav-buttons">
@@ -75,12 +78,12 @@ export function TopBar({
         <button
           type="button"
           className="user-chip"
-          onClick={() => navigate({ type: 'settings' })}
-          aria-label="Abrir definições"
-          title="Definições"
+          onClick={() => navigate({ type: 'profile' })}
+          aria-label="Abrir perfil"
+          title="Perfil"
         >
-          <span className="avatar">O</span>
-          <span className="user-name">Ouvinte</span>
+          <span className="avatar">{initialOf(profile.name)}</span>
+          <span className="user-name">{profile.name}</span>
         </button>
       </div>
     </div>

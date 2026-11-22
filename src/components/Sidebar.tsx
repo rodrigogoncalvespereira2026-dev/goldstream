@@ -2,7 +2,15 @@ import { PLAYLISTS } from '../lib/catalog'
 import type { Navigate, View } from '../lib/nav'
 import { usePlayer } from '../lib/player'
 import { cx, plural } from '../lib/format'
-import { HeartIcon, HomeIcon, LibraryIcon, LogoMark, SearchIcon, SettingsIcon } from './Icons'
+import {
+  HeartIcon,
+  HomeIcon,
+  LibraryIcon,
+  LogoMark,
+  SearchIcon,
+  SettingsIcon,
+  UserIcon,
+} from './Icons'
 
 type SidebarProps = {
   view: View
@@ -44,6 +52,14 @@ export function Sidebar({ view, navigate }: SidebarProps) {
           >
             <LibraryIcon size={25} />
             <span>Sua biblioteca</span>
+          </button>
+          <button
+            type="button"
+            className={cx('nav-item', view.type === 'profile' && 'is-active')}
+            onClick={() => navigate({ type: 'profile' })}
+          >
+            <UserIcon size={25} />
+            <span>Perfil</span>
           </button>
           <button
             type="button"
