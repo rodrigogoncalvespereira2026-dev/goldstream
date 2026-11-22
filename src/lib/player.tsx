@@ -201,11 +201,14 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const ytAudioPending = Boolean(
     isYouTube && current && !ytAudioSrc && !ytAudioFailed[current.id],
   )
-  // O iframe do YouTube só existe fora do nativo: no telemóvel o som sai sempre do
-  // ExoPlayer (ou mostra um aviso). Sem isto, uma faixa que falhasse a resolução
-  // limpava a fila nativa e calava a música.
+  // Fora do nativo o som sai do elemento de áudio ou, em último caso, do iframe. No
+  // telemóvel manda o ExoPlayer; o iframe só entra quando a extração do áudio falhou,
+  // para a faixa não ficar muda.
   const usesIframe = Boolean(
-    !nativePlatform && isYouTube && !ytAudioSrc && !ytAudioPending,
+    isYouTube &&
+      !ytAudioSrc &&
+      !ytAudioPending &&
+      (!nativePlatform || Boolean(current && ytAudioFailed[current.id])),
   )
 
   const stateRef = useRef({ order, pos, repeat })
@@ -231,23 +234,45 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     setIsPlaying(play)
   }, [])
 
+  /** Todos os assets que o motor nativo pode ter carregado (para os calar). */
+  const nativeAssetIds = useCallback((): string[] => {
+    const ids = new Set(nativePlayingRef.current)
+    nativeQueuedRef.current.forEach((id) => ids.add(id))
+    if (nativeLoadedRef.current) ids.add(nativeLoadedRef.current)
+    return Array.from(ids)
+  }, [])
+
+  /**
+   * Cala tudo menos a faixa indicada. Cada faixa do plugin nativo tem o seu próprio
+   * player: sem isto, a faixa anterior continuava a tocar em cima da nova.
+   */
+  const silenceNativeOthers = useCallback(
+    (keep: string | null) => {
+      if (!nativePlatform) return
+      nativeAssetIds().forEach((assetId) => {
+        if (assetId === keep) return
+        nativePlayingRef.current.delete(assetId)
+        void NativeAudio.pause({ assetId }).catch(() => {})
+      })
+    },
+    [nativePlatform, nativeAssetIds],
+  )
+
   /** Manda o motor ativo calar/tocar já, sem esperar por efeitos nem pela fila. */
   const applyPlaybackNow = useCallback(
     (play: boolean) => {
-      if (nativePlatform) {
-        if (usesIframeRef.current) return
+      if (nativePlatform && !usesIframeRef.current) {
         if (play) {
           const assetId = nativeLoadedRef.current
           if (assetId) {
+            silenceNativeOthers(assetId)
             void NativeAudio.resume({ assetId }).catch(() =>
               NativeAudio.play({ assetId }).catch(() => {}),
             )
           }
           return
         }
-        const targets = new Set(nativePlayingRef.current)
-        if (nativeLoadedRef.current) targets.add(nativeLoadedRef.current)
-        targets.forEach((assetId) => {
+        nativeAssetIds().forEach((assetId) => {
           void NativeAudio.pause({ assetId }).catch(() => {})
         })
         return
@@ -265,7 +290,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         /* player ainda não existe */
       }
     },
-    [nativePlatform],
+    [nativePlatform, nativeAssetIds, silenceNativeOthers],
   )
 
   const startSleepTimer = useCallback((minutes: number) => {
@@ -403,8 +428,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         // Aviso de uma faixa que já não é a atual: não mexer na reprodução.
         if (assetId && nativeLoadedRef.current && assetId !== nativeLoadedRef.current) return
 
-        // Repetir a mesma faixa: voltar a tocar do início.
+        // Repetir a mesma faixa: voltar a tocar do início (sem mais nada a tocar).
         if (assetId && stateRef.current.repeat === 'one') {
+          silenceNativeOthers(assetId)
           void NativeAudio.play({ assetId, time: 0 }).catch(() => {})
           setCurrentTime(0)
           return
@@ -414,6 +440,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         // Volta a tocar a mesma em vez de saltar para outra música.
         if (assetId && Date.now() - seekedAtRef.current < 1500) {
           seekedAtRef.current = 0
+          silenceNativeOthers(assetId)
           void NativeAudio.play({ assetId, time: 0 }).catch(() => {})
           setCurrentTime(0)
           return
@@ -532,28 +559,6 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       const track = current
       let cancelled = false
 
-      const stopAsset = async (assetId: string) => {
-        nativePlayingRef.current.delete(assetId)
-        await NativeAudio.stop({ assetId }).catch(() => {})
-        await NativeAudio.unload({ assetId }).catch(() => {})
-      }
-
-      // Só um áudio pode tocar: todos os outros assets são parados e libertados.
-      const silenceOthers = async (keep: string | null) => {
-        for (const assetId of Array.from(nativePlayingRef.current)) {
-          if (assetId !== keep) await stopAsset(assetId)
-        }
-      }
-
-      // Pausa tudo o que esteve a tocar (sem descarregar, para poder retomar).
-      const silenceAll = async () => {
-        const targets = new Set(nativePlayingRef.current)
-        if (nativeLoadedRef.current) targets.add(nativeLoadedRef.current)
-        for (const assetId of targets) {
-          await NativeAudio.pause({ assetId }).catch(() => {})
-        }
-      }
-
       const run = async () => {
         if (!track || usesIframe) {
           nativeLoadedRef.current = null
@@ -561,7 +566,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           nativeQueuedRef.current = new Set()
           queueGenerationRef.current += 1
           await NativeAudio.clearQueue().catch(() => {})
-          await silenceOthers(null)
+          silenceNativeOthers(null)
           return
         }
 
@@ -570,6 +575,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           nativeAdvancedRef.current = null
           nativeLoadedRef.current = track.id
           nativePlayingRef.current.add(track.id)
+          silenceNativeOthers(track.id)
           setCurrentTime(0)
           if (isPlaying) return
         }
@@ -577,13 +583,15 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         // Carregou em pausa: cala tudo o que estiver carregado, mesmo que a fila
         // ainda não tenha chegado a esta faixa.
         if (!isPlaying) {
-          await silenceAll()
+          silenceNativeOthers(null)
           return
         }
 
         // Ainda não está na fila: o efeito abaixo manda construi-la a partir daqui.
         if (!nativeQueuedRef.current.has(track.id)) return
 
+        // Uma só música de cada vez: cala o que tiver ficado para trás.
+        silenceNativeOthers(track.id)
         nativePlayingRef.current.add(track.id)
         if (cancelled) return
 
@@ -637,7 +645,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     } else {
       audio.pause()
     }
-  }, [current, isPlaying, durations, usesIframe, ytAudioSrc, nativePlatform])
+  }, [current, isPlaying, durations, usesIframe, ytAudioSrc, nativePlatform, silenceNativeOthers])
 
   /**
    * Entrega a lista ao motor nativo. É isto que faz a música mudar sozinha e voltar a
@@ -650,7 +658,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     const headQueued = nativeQueuedRef.current.has(current.id)
     const ids = order.length ? order : [current.id]
     const startIndex = Math.max(0, ids.indexOf(current.id))
-    const generation = queueGenerationRef.current
+    // Cada passagem por aqui invalida as entregas antigas: sem isto, faixas saltadas
+    // em paralelo conseguiam arrancar várias ao mesmo tempo.
+    const generation = ++queueGenerationRef.current
 
     const srcFor = async (track: Track): Promise<string | null> => {
       if (track.videoId) {
@@ -666,8 +676,22 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         const headSrc = await srcFor(current)
         if (queueGenerationRef.current !== generation) return
         if (!headSrc) {
-          // Uma música que o YouTube não deixa extrair não pode parar tudo: passa à seguinte.
           failedTracksRef.current.add(current.id)
+
+          // Faixa do YouTube sem áudio extraível: no telemóvel ainda toca no player
+          // do YouTube (em primeiro plano), em vez de ficar muda.
+          if (current.provider === 'youtube') {
+            nativeQueueActiveRef.current = false
+            nativeQueuedRef.current = new Set()
+            nativeLoadedRef.current = null
+            silenceNativeOthers(null)
+            setYtAudioFailed((prev) =>
+              prev[current.id] ? prev : { ...prev, [current.id]: true },
+            )
+            return
+          }
+
+          // Uma música que não dá áudio não pode parar tudo: passa à seguinte.
           const remaining = ids
             .slice(startIndex + 1)
             .find((id) => !failedTracksRef.current.has(id))
@@ -676,6 +700,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
             setPlayerNotice({
               message: `Não consegui tocar “${current.title}”. A passar à seguinte…`,
             })
+            // A faixa anterior não pode ficar a tocar por baixo da seguinte.
+            silenceNativeOthers(null)
             setIntent(true)
             setPos(ids.indexOf(remaining))
           } else {
@@ -694,11 +720,26 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         nativeLoadedRef.current = current.id
         nativePlayingRef.current.add(current.id)
 
-        await NativeAudio.setQueue({
+        // Um só som: as faixas que ficaram da lista anterior são caladas agora.
+        silenceNativeOthers(current.id)
+
+        const queued = await NativeAudio.setQueue({
           items: [nativeItem(current, headSrc)],
           startIndex: 0,
           autoPlay: isPlayingRef.current,
-        }).catch(() => {})
+        })
+          .then(() => true)
+          .catch(() => false)
+
+        // Motor sem fila (versão antiga do plugin): toca a faixa no modo simples,
+        // para a música sair de qualquer maneira.
+        if (!queued) {
+          nativeQueueActiveRef.current = false
+          await NativeAudio.preload(nativeItem(current, headSrc)).catch(() => {})
+          if (intentRef.current.play) {
+            await NativeAudio.play({ assetId: current.id }).catch(() => {})
+          }
+        }
 
         // Se carregou em pausa enquanto a faixa carregava, o setQueue pode já ter
         // arrancado: volta a calar. Sem isto a música "não parava".
@@ -716,11 +757,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         const src = await srcFor(track)
         if (queueGenerationRef.current !== generation) return
         if (!src) continue
-        await NativeAudio.queueAdd({ items: [nativeItem(track, src)] }).catch(() => {})
-        nativeQueuedRef.current.add(id)
+        const added = await NativeAudio.queueAdd({ items: [nativeItem(track, src)] })
+          .then(() => true)
+          .catch(() => false)
+        if (added) nativeQueuedRef.current.add(id)
       }
     })()
-  }, [current, order, nativePlatform, usesIframe, queueNonce])
+  }, [current, order, nativePlatform, usesIframe, queueNonce, silenceNativeOthers])
 
   // Trocar de faixa no nativo: o tempo e a duração da anterior não podem ficar na
   // barra (um arrasto com a duração errada saltava para outra música).
@@ -730,6 +773,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     setCurrentTime(0)
     setDuration(currentRef.current?.duration ?? 0)
   }, [currentId, nativePlatform])
+
+  // Uma só música de cada vez: quando a faixa muda, o que ficou para trás é calado já.
+  useEffect(() => {
+    if (!nativePlatform || !currentId) return
+    silenceNativeOthers(currentId)
+  }, [currentId, nativePlatform, silenceNativeOthers])
 
   // Repetir também é do motor nativo (uma faixa, a lista toda, ou nada).
   useEffect(() => {
@@ -1167,7 +1216,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     if (mode === 'one') {
       if (!usesIframeRef.current && Capacitor.isNativePlatform()) {
         const assetId = nativeLoadedRef.current
-        if (assetId) void NativeAudio.play({ assetId, time: 0 }).catch(() => {})
+        if (assetId) {
+          silenceNativeOthers(assetId)
+          void NativeAudio.play({ assetId, time: 0 }).catch(() => {})
+        }
         return
       }
       if (usesIframeRef.current) {
@@ -1187,7 +1239,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       return
     }
     step(1, true)
-  }, [step])
+  }, [step, silenceNativeOthers])
 
   useEffect(() => {
     endedRef.current = handleEnded

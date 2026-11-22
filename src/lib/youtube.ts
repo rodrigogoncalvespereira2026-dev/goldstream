@@ -361,6 +361,13 @@ export async function resolveYouTubeAudio(
     }
   }
 
+  // No telemóvel não vale a pena esperar pelas instâncias públicas: devolvem 404 e
+  // demoram. Sem áudio nativo, a app passa já para o player do YouTube.
+  if (Capacitor.isNativePlatform()) {
+    audioFailureCache.set(videoId, Date.now())
+    return null
+  }
+
   for (const host of PIPED_HOSTS) {
     try {
       const response = await fetch(`https://${host}/streams/${videoId}`, { signal })
