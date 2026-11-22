@@ -1,3 +1,4 @@
+import { Capacitor, registerPlugin } from '@capacitor/core'
 import { registerTracks, type Track } from './catalog'
 
 const API = 'https://www.googleapis.com/youtube/v3'
@@ -308,6 +309,13 @@ type PipedStreamsPayload = { audioStreams?: PipedAudioStream[] }
 
 const audioStreamCache = new Map<string, string>()
 
+type YouTubeAudioPlugin = {
+  resolve(options: { videoId: string }): Promise<{ url: string; mimeType?: string }>
+}
+
+/** Extração nativa (NewPipeExtractor) — só existe dentro do APK. */
+const YouTubeAudio = registerPlugin<YouTubeAudioPlugin>('YouTubeAudio')
+
 /**
  * Devolve um URL de áudio progressivo do vídeo. Com ele a faixa toca no player nativo do
  * sistema, que continua com o ecrã bloqueado — o iframe do YouTube pausa quando a app sai
@@ -319,6 +327,19 @@ export async function resolveYouTubeAudio(
 ): Promise<string | null> {
   const cached = audioStreamCache.get(videoId)
   if (cached) return cached
+
+  // No telemóvel a extração é local: as APIs públicas deixaram de devolver o áudio.
+  if (Capacitor.isNativePlatform() && Capacitor.isPluginAvailable('YouTubeAudio')) {
+    try {
+      const resolved = await YouTubeAudio.resolve({ videoId })
+      if (resolved?.url) {
+        audioStreamCache.set(videoId, resolved.url)
+        return resolved.url
+      }
+    } catch {
+      /* tenta as instâncias públicas abaixo */
+    }
+  }
 
   for (const host of PIPED_HOSTS) {
     try {

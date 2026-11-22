@@ -60,6 +60,7 @@ export function Settings() {
         </p>
         <p className="settings-note settings-note-tech">
           Motor de áudio: {Capacitor.isPluginAvailable('NativeAudio') ? 'nativo' : 'navegador'} ·
+          Áudio do YouTube: {Capacitor.isPluginAvailable('YouTubeAudio') ? 'nativo' : 'indisponível'} ·
           Atualizador: {Capacitor.isPluginAvailable('AppUpdate') ? 'nativo' : 'indisponível'}
         </p>
       </Section>

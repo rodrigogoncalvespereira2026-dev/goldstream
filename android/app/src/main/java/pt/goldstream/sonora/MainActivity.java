@@ -12,6 +12,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(AppUpdatePlugin.class);
+        registerPlugin(YouTubeAudioPlugin.class);
         super.onCreate(savedInstanceState);
 
         // No Android 13+ o cartão de música (notificação do serviço em primeiro plano)
