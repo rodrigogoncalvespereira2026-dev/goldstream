@@ -1675,7 +1675,6 @@ img {
 }
 
 .player-repeat:hover {
-  background: rgba(255, 255, 255, 0.08);
   color: var(--text);
   transform: translateY(-1px);
 }
@@ -1685,14 +1684,11 @@ img {
 }
 
 .player-repeat.is-on {
-  background: var(--accent);
-  color: #fff;
-  box-shadow: 0 2px 8px rgba(var(--accent-rgb, 99, 102, 241), 0.4);
+  color: var(--accent);
 }
 
 .player-repeat.is-on:hover {
-  background: var(--accent);
-  filter: brightness(1.1);
+  color: var(--accent);
   transform: translateY(-1px);
 }
 

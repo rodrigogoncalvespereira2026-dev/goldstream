@@ -79,20 +79,20 @@ export const ShuffleIcon = ({ size = 24, ...rest }: IconProps) => (
 )
 
 export const RepeatIcon = ({ size = 24, ...rest }: IconProps) => (
-  <svg {...base(size)} {...rest} strokeWidth={2}>
-    <path d="M17 3h-2a5 5 0 0 0-5 5v2" />
-    <path d="m14 5 3-3-3-3" />
-    <path d="M7 21h2a5 5 0 0 0 5-5v-2" />
-    <path d="m10 19-3 3 3 3" />
+  <svg {...base(size)} {...rest} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 12v2a7 7 0 0 0 7 7h2" />
+    <path d="m21 5-3 3 3 3" />
+    <path d="M21 12v-2a7 7 0 0 0-7-7h-2" />
+    <path d="m3 19 3-3-3-3" />
   </svg>
 )
 
 export const RepeatOneIcon = ({ size = 24, ...rest }: IconProps) => (
-  <svg {...base(size)} {...rest} strokeWidth={2}>
-    <path d="M17 3h-2a5 5 0 0 0-5 5v2" />
-    <path d="m14 5 3-3-3-3" />
-    <path d="M7 21h2a5 5 0 0 0 5-5v-2" />
-    <path d="m10 19-3 3 3 3" />
+  <svg {...base(size)} {...rest} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 12v2a7 7 0 0 0 7 7h2" />
+    <path d="m21 5-3 3 3 3" />
+    <path d="M21 12v-2a7 7 0 0 0-7-7h-2" />
+    <path d="m3 19 3-3-3-3" />
     <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
   </svg>
 )
