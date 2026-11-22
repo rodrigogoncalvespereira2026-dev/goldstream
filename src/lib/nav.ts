@@ -1,6 +1,6 @@
 export type View =
   | { type: 'home' }
-  | { type: 'search' }
+  | { type: 'search'; query?: string }
   | { type: 'library' }
   | { type: 'settings' }
   | { type: 'album'; id: string }

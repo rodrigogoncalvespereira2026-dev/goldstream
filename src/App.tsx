@@ -41,6 +41,8 @@ function Shell() {
 
   const navigate = useCallback(
     (target: View) => {
+      // Um tema/cartão pode abrir a busca já com o termo escolhido.
+      if (target.type === 'search' && target.query) setQuery(target.query)
       setHistory((previous) => {
         const trimmed = previous.slice(0, pointer + 1)
         return [...trimmed, target]
@@ -99,10 +101,12 @@ function Shell() {
 
   const tint = useMemo(() => tintFor(view), [view])
 
+  const activeQuery = view.type === 'search' && view.query ? view.query : query
+
   const content = (() => {
     switch (view.type) {
       case 'search':
-        return <Search query={query} navigate={navigate} />
+        return <Search query={activeQuery} navigate={navigate} />
       case 'library':
         return <Library navigate={navigate} />
       case 'settings':
@@ -136,7 +140,7 @@ function Shell() {
           >
             <TopBar
               navigate={navigate}
-              query={query}
+              query={activeQuery}
               onQuery={handleQuery}
               canGoBack={pointer > 0}
               canGoForward={pointer < history.length - 1}

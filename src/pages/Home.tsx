@@ -1,9 +1,22 @@
 import { ALBUMS, PLAYLISTS, getAlbum, getTrack } from '../lib/catalog'
 import { AlbumCard, PlaylistCard, Section } from '../components/Cards'
+import { CoverImage } from '../components/CoverImage'
 import { HeartIcon, PlayIcon } from '../components/Icons'
 import { greeting } from '../lib/format'
 import { usePlayer } from '../lib/player'
 import type { Navigate } from '../lib/nav'
+
+/** Cartões de descoberta: cada um abre a busca já com o tema escolhido. */
+const THEMES = [
+  { label: '#tokusatsu', query: 'tokusatsu opening themes', from: '#7f1d3a', to: '#3b0a1c' },
+  { label: '#temas de genérico', query: 'temas de genéricos de séries', from: '#1e3a8a', to: '#0b1638' },
+  { label: '#anime', query: 'anime openings', from: '#c2410c', to: '#3b1206' },
+  { label: '#power rangers', query: 'power rangers theme song', from: '#b91c1c', to: '#3f0a0a' },
+  { label: '#pimba', query: 'pimba mix', from: '#a16207', to: '#3a2405' },
+  { label: '#fado', query: 'fado clássico', from: '#4c1d95', to: '#1c0a38' },
+  { label: '#rock português', query: 'rock português anos 80', from: '#0f766e', to: '#052b28' },
+  { label: '#k-pop', query: 'kpop hits', from: '#be185d', to: '#3f0722' },
+]
 
 export function Home({ navigate }: { navigate: Navigate }) {
   const { recent, liked, playQueue } = usePlayer()
@@ -20,6 +33,11 @@ export function Home({ navigate }: { navigate: Navigate }) {
   }
 
   const highlights = recentAlbums.length ? recentAlbums : ALBUMS.slice(0, 5)
+
+  const recentTracks = recent
+    .map((id) => getTrack(id))
+    .filter((track): track is NonNullable<typeof track> => Boolean(track))
+    .slice(0, 12)
 
   const quickItems = [
     {
@@ -81,6 +99,46 @@ export function Home({ navigate }: { navigate: Navigate }) {
           </div>
         ))}
       </div>
+
+      {recentTracks.length > 0 && (
+        <Section title="Recentes" note="Voltar a ouvir">
+          <div className="shelf">
+            {recentTracks.map((track) => (
+              <button
+                key={track.id}
+                type="button"
+                className="shelf-card"
+                onClick={() =>
+                  playQueue(
+                    recentTracks.map((item) => item.id),
+                    track.id,
+                  )
+                }
+              >
+                <CoverImage className="shelf-art" src={track.cover} />
+                <span className="shelf-title">{track.title}</span>
+                <span className="shelf-sub">{track.artist}</span>
+              </button>
+            ))}
+          </div>
+        </Section>
+      )}
+
+      <Section title="Descobre algo novo" note="Temas para começar">
+        <div className="shelf">
+          {THEMES.map((theme) => (
+            <button
+              key={theme.label}
+              type="button"
+              className="theme-card"
+              style={{ background: `linear-gradient(140deg, ${theme.from}, ${theme.to})` }}
+              onClick={() => navigate({ type: 'search', query: theme.query })}
+            >
+              {theme.label}
+            </button>
+          ))}
+        </div>
+      </Section>
 
       <Section title="Tocadas recentemente">
         <div className="card-grid">

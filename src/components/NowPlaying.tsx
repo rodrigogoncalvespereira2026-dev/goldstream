@@ -5,6 +5,7 @@ import { cx, formatTime } from '../lib/format'
 import { usePlayer, usePlayerTime } from '../lib/player'
 import { CoverImage } from './CoverImage'
 import { Slider } from './Slider'
+import { RadioButton } from './RadioButton'
 import {
   ChevronDownIcon,
   HeartIcon,
@@ -145,12 +146,15 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
               </button>
             </div>
 
-            {current.provider === 'youtube' && current.videoId && (
-              <button type="button" className="np-watch" onClick={() => openWatch(current.videoId as string)}>
-                <VideoIcon size={17} />
-                Ver vídeo
-              </button>
-            )}
+            <div className="np-actions">
+              {current.provider === 'youtube' && current.videoId && (
+                <button type="button" className="np-watch" onClick={() => openWatch(current.videoId as string)}>
+                  <VideoIcon size={17} />
+                  Ver vídeo
+                </button>
+              )}
+              <RadioButton artist={current.artist} />
+            </div>
 
             <div className="np-progress">
               <Slider

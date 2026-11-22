@@ -6,6 +6,7 @@ import { useMediaQuery } from '../lib/useMediaQuery'
 import { Slider } from './Slider'
 import { CoverImage } from './CoverImage'
 import { NowPlaying } from './NowPlaying'
+import { RadioButton } from './RadioButton'
 import {
   HeartIcon,
   NextIcon,
@@ -90,6 +91,7 @@ export function PlayerBar() {
                   <span className="player-artist">{current.artist}</span>
                 </span>
               </button>
+              <RadioButton artist={current.artist} variant="icon" />
               {current.provider === 'youtube' && current.videoId && (
                 <button
                   type="button"
