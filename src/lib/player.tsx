@@ -163,6 +163,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [order, setOrder] = useState<string[]>(() => readPlayerState().order)
   const [contextQueue, setContextQueue] = useState<string[]>([])
   const [pos, setPos] = useState(() => readPlayerState().pos)
+  /** Faixas cujo áudio não se conseguiu obter nesta sessão (para não voltar a travar a fila). */
+  const failedTracksRef = useRef<Set<string>>(new Set())
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
@@ -635,9 +637,26 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         const headSrc = await srcFor(current)
         if (queueGenerationRef.current !== generation) return
         if (!headSrc) {
-          setPlayerNotice({ message: 'Não consegui preparar esta faixa. Tente outra.' })
+          // Uma música que o YouTube não deixa extrair não pode parar tudo: passa à seguinte.
+          failedTracksRef.current.add(current.id)
+          const remaining = ids
+            .slice(startIndex + 1)
+            .find((id) => !failedTracksRef.current.has(id))
+
+          if (remaining) {
+            setPlayerNotice({
+              message: `Não consegui tocar “${current.title}”. A passar à seguinte…`,
+            })
+            setIntent(true)
+            setPos(ids.indexOf(remaining))
+          } else {
+            setPlayerNotice({ message: 'Não consegui tocar estas músicas. Tente outra pesquisa.' })
+            setIntent(false)
+          }
           return
         }
+
+        failedTracksRef.current.delete(current.id)
 
         await NativeAudio.clearQueue().catch(() => {})
 
@@ -945,6 +964,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       if (!ids.length) return
       const first = startId && ids.includes(startId) ? startId : ids[0]
       const nextOrder = shuffle ? shuffledFrom(ids, first) : [...ids]
+      // Uma playlist nova é uma nova oportunidade: deixa tentar de novo as que falharam.
+      ids.forEach((id) => failedTracksRef.current.delete(id))
       setContextQueue([...ids])
       setOrder(nextOrder)
       setPos(nextOrder.indexOf(first))

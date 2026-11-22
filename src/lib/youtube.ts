@@ -309,6 +309,8 @@ type PipedAudioStream = { url?: string; mimeType?: string; bitrate?: number }
 type PipedStreamsPayload = { audioStreams?: PipedAudioStream[] }
 
 const audioStreamCache = new Map<string, string>()
+/** Faixas que falharam há pouco: evita voltar a pedir o áudio a cada tentativa. */
+const audioFailureCache = new Map<string, number>()
 
 type NativeSearchItem = {
   videoId?: string
@@ -338,16 +340,24 @@ export async function resolveYouTubeAudio(
   const cached = audioStreamCache.get(videoId)
   if (cached) return cached
 
+  const failedAt = audioFailureCache.get(videoId)
+  if (failedAt && Date.now() - failedAt < 90_000) return null
+
   // No telemóvel a extração é local: as APIs públicas deixaram de devolver o áudio.
   if (Capacitor.isNativePlatform() && Capacitor.isPluginAvailable('YouTubeAudio')) {
-    try {
-      const resolved = await YouTubeAudio.resolve({ videoId })
-      if (resolved?.url) {
-        audioStreamCache.set(videoId, resolved.url)
-        return resolved.url
+    // Duas tentativas: a primeira pode apanhar uma resposta instável do YouTube.
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        const resolved = await YouTubeAudio.resolve({ videoId })
+        if (resolved?.url) {
+          audioFailureCache.delete(videoId)
+          audioStreamCache.set(videoId, resolved.url)
+          return resolved.url
+        }
+      } catch {
+        /* nova tentativa, depois as instâncias públicas */
       }
-    } catch {
-      /* tenta as instâncias públicas abaixo */
+      if (attempt === 0) await new Promise((done) => setTimeout(done, 600))
     }
   }
 
@@ -368,6 +378,7 @@ export async function resolveYouTubeAudio(
     }
   }
 
+  audioFailureCache.set(videoId, Date.now())
   return null
 }
 
@@ -446,6 +457,8 @@ async function searchYouTubeNative(query: string, limit: number): Promise<Track[
     const raw = Number(item.duration ?? 0)
     const seconds = Number.isFinite(raw) && raw > 0 ? raw : 0
     if (seconds > 0 && seconds < 20) continue
+    // Transmissões em direto não dão áudio guardado: apareciam na lista e não tocavam.
+    if (seconds === 0 && /\b(live|ao vivo|24\/7)\b/i.test(title)) continue
     const song = songFields(title, decodeEntity(item.uploader ?? 'YouTube'))
     tracks.push({
       id: `yt:${videoId}`,
