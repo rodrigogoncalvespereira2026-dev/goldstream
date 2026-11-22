@@ -170,6 +170,30 @@ export const QueueIcon = ({ size = 24, ...rest }: IconProps) => (
   </svg>
 )
 
+export const LyricsIcon = ({ size = 24, ...rest }: IconProps) => (
+  <svg {...base(size)} {...rest}>
+    <path d="M5 4.5h9.5L19 9v10.5H5z" />
+    <path d="M8 9.5h4M8 13h7M8 16.5h5" />
+  </svg>
+)
+
+export const ShareIcon = ({ size = 24, ...rest }: IconProps) => (
+  <svg {...base(size)} {...rest}>
+    <circle cx="17.5" cy="6" r="2.5" />
+    <circle cx="6.5" cy="12" r="2.5" />
+    <circle cx="17.5" cy="18" r="2.5" />
+    <path d="M8.8 10.8 15.2 7.2M8.8 13.2l6.4 3.6" />
+  </svg>
+)
+
+export const TimerIcon = ({ size = 24, ...rest }: IconProps) => (
+  <svg {...base(size)} {...rest}>
+    <circle cx="12" cy="13.5" r="7" />
+    <path d="M12 10v3.8l2.4 1.6" />
+    <path d="M9.5 3.5h5" />
+  </svg>
+)
+
 export const MusicNoteIcon = ({ size = 24, ...rest }: IconProps) => (
   <svg {...base(size)} {...rest}>
     <path d="M9 17.5V5.2l10-2v11.6" />

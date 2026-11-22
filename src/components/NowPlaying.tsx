@@ -1,15 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
 import type { TouchEvent as ReactTouchEvent } from 'react'
 import { getAlbum, getTrack } from '../lib/catalog'
+import { fetchLyrics, type LyricsResult } from '../lib/lyrics'
 import { cx, formatTime } from '../lib/format'
 import { usePlayer, usePlayerTime } from '../lib/player'
 import { CoverImage } from './CoverImage'
 import { Slider } from './Slider'
 import { RadioButton } from './RadioButton'
 import { PlaylistSheet } from './PlaylistSheet'
+import { LyricsSheet } from './LyricsSheet'
+import { QueueSheet } from './QueueSheet'
 import {
   ChevronDownIcon,
   HeartIcon,
+  LyricsIcon,
   NextIcon,
   PauseIcon,
   PlusIcon,
@@ -18,6 +22,7 @@ import {
   PrevIcon,
   RepeatIcon,
   RepeatOneIcon,
+  ShareIcon,
   ShuffleIcon,
   VideoIcon,
 } from './Icons'
@@ -56,6 +61,49 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
   const [dragging, setDragging] = useState(false)
   const [closing, setClosing] = useState(false)
   const [sheetOpen, setSheetOpen] = useState(false)
+  const [queueOpen, setQueueOpen] = useState(false)
+  const [lyricsOpen, setLyricsOpen] = useState(false)
+  const [lyrics, setLyrics] = useState<LyricsResult | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  // A letra é pedida quando a música muda (só com o ecrã aberto, para não gastar dados à toa).
+  useEffect(() => {
+    if (!open || !current) {
+      setLyrics(null)
+      return
+    }
+    const controller = new AbortController()
+    setLyrics(null)
+    void fetchLyrics(current, controller.signal)
+      .then((result) => {
+        if (!controller.signal.aborted) setLyrics(result)
+      })
+      .catch(() => {})
+    return () => controller.abort()
+  }, [open, current])
+
+  const share = async () => {
+    if (!current) return
+    const url = current.videoId
+      ? `https://www.youtube.com/watch?v=${current.videoId}`
+      : window.location.origin
+    const data = {
+      title: `${current.title} — ${current.artist}`,
+      text: `A ouvir «${current.title}» de ${current.artist} na goldenstream`,
+      url,
+    }
+    try {
+      if (navigator.share) {
+        await navigator.share(data)
+        return
+      }
+      await navigator.clipboard.writeText(`${data.text} ${url}`)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 2000)
+    } catch {
+      /* partilha cancelada */
+    }
+  }
 
   const resetDrag = () => {
     setDragging(false)
@@ -226,13 +274,49 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
               </button>
             </div>
 
+            <div className="np-extras">
+              <button
+                type="button"
+                className="np-extra"
+                onClick={() => setLyricsOpen(true)}
+                aria-label="Ver letra"
+              >
+                <LyricsIcon size={22} />
+              </button>
+              <button type="button" className="np-extra" onClick={share} aria-label="Partilhar música">
+                <ShareIcon size={22} />
+                {copied && <span className="np-extra-note">Copiado</span>}
+              </button>
+              <button type="button" className="np-extra" onClick={() => setQueueOpen(true)} aria-label="Ver fila">
+                <QueueIcon size={22} />
+              </button>
+            </div>
+
+            {lyrics && (
+              <section className="np-lyrics">
+                <h3 className="np-lyrics-title">Pré-visualização das letras</h3>
+                <div className="np-lyrics-body">
+                  {lyrics.plain
+                    .split('\n')
+                    .filter((line) => line.trim())
+                    .slice(0, 4)
+                    .map((line, index) => (
+                      <p key={index}>{line}</p>
+                    ))}
+                </div>
+                <button type="button" className="np-lyrics-more" onClick={() => setLyricsOpen(true)}>
+                  Mostrar letra
+                </button>
+              </section>
+            )}
+
             {queue.length > 1 && (
               <section className="np-queue">
                 <h3 className="np-queue-title">
                   <QueueIcon size={16} /> A seguir · {queue.length - queueIndex - 1} na fila
                 </h3>
                 <ul className="np-queue-list">
-                  {queue.map((id, index) => {
+                  {queue.slice(0, Math.min(queue.length, queueIndex + 4)).map((id, index) => {
                     const track = getTrack(id)
                     if (!track) return null
                     const active = index === queueIndex
@@ -263,6 +347,11 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
                     )
                   })}
                 </ul>
+                {queue.length > queueIndex + 4 && (
+                  <button type="button" className="np-queue-more" onClick={() => setQueueOpen(true)}>
+                    Ver fila completa
+                  </button>
+                )}
               </section>
             )}
 
@@ -271,6 +360,8 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
             </p>
 
             {sheetOpen && <PlaylistSheet trackId={current.id} onClose={() => setSheetOpen(false)} />}
+            {queueOpen && <QueueSheet onClose={() => setQueueOpen(false)} />}
+            {lyricsOpen && <LyricsSheet track={current} onClose={() => setLyricsOpen(false)} />}
           </>
         ) : (
           <div className="np-empty">

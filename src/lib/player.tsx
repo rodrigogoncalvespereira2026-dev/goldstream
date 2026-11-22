@@ -52,6 +52,10 @@ type PlayerValue = {
   watchVideoId: string | null
   openWatch: (videoId: string) => void
   closeWatch: () => void
+  /** Hora (epoch ms) em que o temporizador de sono para o áudio; null = desligado. */
+  sleepEndsAt: number | null
+  startSleepTimer: (minutes: number) => void
+  cancelSleepTimer: () => void
 }
 
 /** Estado que muda a cada tique do player: só quem mostra o tempo assina este contexto. */
@@ -160,6 +164,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   const [stageEl, setStageEl] = useState<HTMLElement | null>(null)
   const [playerNotice, setPlayerNotice] = useState<PlayerNotice | null>(null)
+  /** Temporizador de sono: quando chega à hora, o áudio pára. */
+  const [sleepEndsAt, setSleepEndsAt] = useState<number | null>(null)
   const [order, setOrder] = useState<string[]>(() => readPlayerState().order)
   const [contextQueue, setContextQueue] = useState<string[]>([])
   const [pos, setPos] = useState(() => readPlayerState().pos)
@@ -261,6 +267,29 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     },
     [nativePlatform],
   )
+
+  const startSleepTimer = useCallback((minutes: number) => {
+    if (!Number.isFinite(minutes) || minutes <= 0) return
+    setSleepEndsAt(Date.now() + minutes * 60_000)
+  }, [])
+
+  const cancelSleepTimer = useCallback(() => setSleepEndsAt(null), [])
+
+  /** Temporizador de sono: quando acaba, o áudio pára e o aviso explica porquê. */
+  useEffect(() => {
+    if (!sleepEndsAt) return
+    const remaining = sleepEndsAt - Date.now()
+    if (remaining <= 0) {
+      setSleepEndsAt(null)
+      return
+    }
+    const timer = window.setTimeout(() => {
+      setSleepEndsAt(null)
+      setIntent(false)
+      setPlayerNotice({ message: 'Temporizador: a música parou. Bom descanso.' })
+    }, remaining)
+    return () => window.clearTimeout(timer)
+  }, [sleepEndsAt, setIntent])
 
   const stopYtTimer = useCallback(() => {
     if (ytTimerRef.current !== null) {
@@ -1241,6 +1270,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       queueIndex: pos,
       jumpTo,
       removeFromQueue,
+      sleepEndsAt,
+      startSleepTimer,
+      cancelSleepTimer,
       playQueue,
       playTrack,
       toggle,
@@ -1272,6 +1304,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       pos,
       jumpTo,
       removeFromQueue,
+      sleepEndsAt,
+      startSleepTimer,
+      cancelSleepTimer,
       playQueue,
       playTrack,
       toggle,

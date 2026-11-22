@@ -3786,3 +3786,259 @@ img {
     opacity: 0.85;
   }
 }
+
+/* ---------------- extras do "agora tocando": letra, partilha, fila ------------ */
+
+.np-extras {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 26px;
+  margin-top: 14px;
+}
+
+.np-extra {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  color: var(--muted);
+  padding: 4px;
+  transition: color 0.12s ease;
+}
+
+.np-extra:hover,
+.np-extra:focus-visible {
+  color: var(--text);
+}
+
+.np-extra-note {
+  position: absolute;
+  bottom: -18px;
+  right: 0;
+  font-size: 11px;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.np-lyrics {
+  margin-top: 18px;
+  padding: 16px 16px 14px;
+  border-radius: 14px;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.04));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.np-lyrics-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.np-lyrics-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.np-lyrics-body p {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.np-lyrics-more {
+  align-self: flex-start;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: var(--text);
+  color: #0b0b0b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.np-queue-more {
+  align-self: flex-start;
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  text-decoration: underline;
+}
+
+.np-queue-more:hover {
+  color: var(--text);
+}
+
+/* ---------- folha da fila ---------- */
+
+.queue-sheet {
+  gap: 10px;
+}
+
+.queue-context {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.queue-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 46vh;
+  overflow-y: auto;
+}
+
+.queue-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.queue-play {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  color: var(--text);
+  text-align: left;
+}
+
+.queue-play:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.queue-art {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 4px;
+  object-fit: cover;
+}
+
+.queue-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.queue-text strong {
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.queue-text span {
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.queue-row.is-current .queue-text strong {
+  color: var(--accent);
+}
+
+.queue-now {
+  flex: none;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.queue-remove {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border-radius: 50%;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--muted);
+}
+
+.queue-remove:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.queue-count {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.queue-timer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 10px;
+  background: #202020;
+}
+
+.queue-timer p {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.queue-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.queue-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 10px;
+  border-radius: 12px;
+  background: #262626;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.queue-action:hover {
+  background: #2f2f2f;
+}
+
+.queue-action.is-on {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--accent);
+}
+
+/* ---------- folha da letra ---------- */
+
+.lyrics-sheet {
+  gap: 12px;
+}
+
+.lyrics-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-bottom: 8px;
+}
+
+.lyrics-body p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  white-space: pre-line;
+  color: rgba(255, 255, 255, 0.88);
+}
