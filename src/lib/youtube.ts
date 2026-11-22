@@ -310,8 +310,17 @@ type PipedStreamsPayload = { audioStreams?: PipedAudioStream[] }
 
 const audioStreamCache = new Map<string, string>()
 
+type NativeSearchItem = {
+  videoId?: string
+  title?: string
+  uploader?: string
+  duration?: number
+  thumbnail?: string
+}
+
 type YouTubeAudioPlugin = {
   resolve(options: { videoId: string }): Promise<{ url: string; mimeType?: string }>
+  search(options: { query: string; limit?: number }): Promise<{ items?: NativeSearchItem[] }>
 }
 
 /** Extração nativa (NewPipeExtractor) — só existe dentro do APK. */
@@ -360,6 +369,103 @@ export async function resolveYouTubeAudio(
   }
 
   return null
+}
+
+/* ---------------- relevância ---------------- */
+
+const normalizeText = (value: string): string =>
+  value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9 ]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+const NOISE = /(\d+\s*(horas?|hours?|h|min|minutes?))|compilation|compilac|playlist|mega ?mix|\bmix\b|best of|top \d+|\d+ ?h\b/
+
+const relevanceScore = (query: string, track: Track): number => {
+  const q = normalizeText(query)
+  if (!q) return 0
+  const title = normalizeText(track.title)
+  const artist = normalizeText(track.artist)
+  const tokens = q.split(' ').filter(Boolean)
+  if (!tokens.length) return 0
+
+  let score = 0
+  if (title === q) score += 140
+  else if (title.startsWith(q)) score += 90
+  else if (title.includes(q)) score += 55
+  if (artist === q) score += 100
+  else if (artist.includes(q)) score += 55
+
+  const matched = tokens.filter((token) => title.includes(token) || artist.includes(token)).length
+  score += (matched / tokens.length) * 45
+
+  // A música pedida deve ficar acima de compilações, mixes e horas de música.
+  if (NOISE.test(title)) score -= 30
+  if (!tokens.every((token) => title.includes(token) || artist.includes(token))) score -= 15
+  if (title.length > 90) score -= 10
+  return score
+}
+
+/** Põe no topo o resultado que mais se parece com o que foi escrito. */
+export function rankByRelevance(query: string, tracks: Track[]): Track[] {
+  return tracks
+    .map((track, index) => ({ track, index, score: relevanceScore(query, track) }))
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .map((entry) => entry.track)
+}
+
+/** Falha depressa em vez de deixar a busca presa se o nativo não responder. */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error('Tempo esgotado.')), ms)
+    promise.then(
+      (value) => {
+        window.clearTimeout(timer)
+        resolve(value)
+      },
+      (error: unknown) => {
+        window.clearTimeout(timer)
+        reject(error)
+      },
+    )
+  })
+}
+
+/** Busca no próprio YouTube a partir do telemóvel (NewPipe), a mesma fonte que toca o áudio. */
+async function searchYouTubeNative(query: string, limit: number): Promise<Track[]> {
+  const payload = await withTimeout(YouTubeAudio.search({ query, limit }), 15000)
+  const tracks: Track[] = []
+
+  for (const item of payload?.items ?? []) {
+    const videoId = (item.videoId ?? '').trim()
+    const title = decodeEntity(item.title ?? '').trim()
+    if (!videoId || !title) continue
+    const raw = Number(item.duration ?? 0)
+    const seconds = Number.isFinite(raw) && raw > 0 ? raw : 0
+    if (seconds > 0 && seconds < 20) continue
+    const song = songFields(title, decodeEntity(item.uploader ?? 'YouTube'))
+    tracks.push({
+      id: `yt:${videoId}`,
+      title: song.title,
+      artist: song.artist,
+      albumId: 'youtube',
+      albumTitle: 'YouTube',
+      cover: item.thumbnail || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+      src: '',
+      genre: 'YouTube',
+      year: 0,
+      position: 0,
+      duration: seconds,
+      external: true,
+      provider: 'youtube',
+      videoId,
+    })
+  }
+
+  return tracks
 }
 
 const trackFromPiped = (item: PipedSearchItem): Track | null => {
@@ -464,11 +570,23 @@ export async function searchYouTubeSongs(
   if (cached) return cached
 
   let tracks: Track[] = []
-  try {
-    tracks = await searchYouTubeWithoutKey(query, limit, signal)
-  } catch (error) {
-    if (signal?.aborted) throw error
-    tracks = await searchYouTube(query, apiKey, signal, limit)
+
+  // No telemóvel a busca é feita no próprio YouTube: é a lista completa e na ordem certa.
+  if (Capacitor.isNativePlatform() && Capacitor.isPluginAvailable('YouTubeAudio')) {
+    try {
+      tracks = await searchYouTubeNative(query, Math.max(limit, 30))
+    } catch {
+      tracks = []
+    }
+  }
+
+  if (!tracks.length) {
+    try {
+      tracks = await searchYouTubeWithoutKey(query, limit, signal)
+    } catch (error) {
+      if (signal?.aborted) throw error
+      tracks = await searchYouTube(query, apiKey, signal, limit)
+    }
   }
 
   // Se a busca pública veio pobre, completa com a API oficial (sem filtro de categoria).
@@ -484,7 +602,7 @@ export async function searchYouTubeSongs(
     }
   }
 
-  const result = tracks.slice(0, limit)
+  const result = rankByRelevance(query, tracks).slice(0, limit)
   registerTracks(result)
   if (keylessCache.size > 40) keylessCache.delete(keylessCache.keys().next().value as string)
   keylessCache.set(cacheKey, result)
