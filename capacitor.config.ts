@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli'
 
 const config: CapacitorConfig = {
   appId: 'pt.goldstream.sonora',
-  appName: 'Sonora',
+  appName: 'goldenstream',
   webDir: 'dist',
   // O app abre a versão publicada: qualquer alteração chega sem instalar um APK novo.
   // Se o site não responder, fica a cópia local (dist) como rede de segurança.

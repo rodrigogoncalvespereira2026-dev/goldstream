@@ -97,7 +97,7 @@ export function Collection({ view, navigate }: { view: CollectionView; navigate:
       cover: albums[0]?.cover ?? ALBUMS[0].cover,
       tint: genre?.from ?? '#2a2a2a',
       trackIds,
-      note: `O melhor de ${view.name} na Sonora.`,
+      note: `O melhor de ${view.name} na goldenstream.`,
       meta: [
         plural(albums.length, 'álbum', 'álbuns'),
         plural(trackIds.length, 'música', 'músicas'),
@@ -227,7 +227,7 @@ export function Collection({ view, navigate }: { view: CollectionView; navigate:
       )}
 
       <p className="page-footer">
-        Sonora · demonstração com faixas livres do SoundHelix. Sem anúncios, porque não há contas.
+        goldenstream · demonstração com faixas livres do SoundHelix. Sem anúncios, porque não há contas.
       </p>
     </div>
   )

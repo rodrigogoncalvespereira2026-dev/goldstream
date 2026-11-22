@@ -10,7 +10,7 @@ export function Settings() {
 
       <Section title="Atualizar app" note="Sempre a versão mais recente">
         <p className="settings-note">
-          O Sonora abre direto a versão publicada online, por isso as novidades chegam sozinhas,
+          O goldenstream abre direto a versão publicada online, por isso as novidades chegam sozinhas,
           sem instalar um ficheiro novo. Se algo ainda aparecer como antes, toque no botão para
           recarregar.
         </p>
@@ -30,7 +30,7 @@ export function Settings() {
 
       <Section title="Sobre">
         <p className="settings-note">
-          Sonora é uma demonstração de player de música. As faixas do catálogo são gravações
+          O goldenstream é uma demonstração de player de música. As faixas do catálogo são gravações
           livres do SoundHelix; as buscas usam Audius e YouTube.
         </p>
       </Section>

@@ -198,7 +198,7 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
             </div>
 
             <p className="np-source">
-              {current.provider === 'youtube' ? 'A tocar no YouTube' : 'A tocar no Sonora'}
+              {current.provider === 'youtube' ? 'A tocar no YouTube' : 'A tocar na goldenstream'}
             </p>
           </>
         ) : (

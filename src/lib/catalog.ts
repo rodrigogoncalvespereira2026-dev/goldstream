@@ -202,7 +202,7 @@ export const PLAYLISTS: Playlist[] = [
     description: 'Faróis, asfalto vazio e sintetizadores.',
     cover: '/covers/neon-tide.jpg',
     tint: '#4b1780',
-    owner: 'Sonora',
+    owner: 'goldenstream',
     trackIds: [
       'neon-tide:0',
       'chrome-bloom:1',
@@ -219,7 +219,7 @@ export const PLAYLISTS: Playlist[] = [
     description: 'Camadas ambientes para não pensar em mais nada.',
     cover: '/covers/low-orbit.jpg',
     tint: '#17265a',
-    owner: 'Sonora',
+    owner: 'goldenstream',
     trackIds: ['low-orbit:0', 'low-orbit:1', 'low-orbit:2', 'golden-hour:1'],
   },
   {
@@ -228,7 +228,7 @@ export const PLAYLISTS: Playlist[] = [
     description: 'Sol na janela, café na mão, nada de pressa.',
     cover: '/covers/golden-hour.jpg',
     tint: '#9a5a24',
-    owner: 'Sonora',
+    owner: 'goldenstream',
     trackIds: [
       'golden-hour:0',
       'golden-hour:2',
@@ -243,7 +243,7 @@ export const PLAYLISTS: Playlist[] = [
     description: 'Riff alto, volume no máximo, vizinho reclamando.',
     cover: '/covers/cinder-smoke.jpg',
     tint: '#74300f',
-    owner: 'Sonora',
+    owner: 'goldenstream',
     trackIds: ['cinder-smoke:0', 'cinder-smoke:2', 'neon-tide:2', 'cinder-smoke:1'],
   },
 ]

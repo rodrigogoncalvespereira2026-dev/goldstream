@@ -17,7 +17,7 @@ export function Sidebar({ view, navigate }: SidebarProps) {
       <div className="sidebar-panel nav-panel">
         <button type="button" className="brand" onClick={() => navigate({ type: 'home' })}>
           <LogoMark size={28} />
-          <span>Sonora</span>
+          <span>goldenstream</span>
         </button>
 
         <nav className="nav-list" aria-label="Navegação principal">

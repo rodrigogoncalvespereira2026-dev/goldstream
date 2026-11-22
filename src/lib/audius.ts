@@ -8,7 +8,7 @@ const HOSTS = [
   'https://discoveryprovider3.audius.co',
 ]
 
-const APP_NAME = 'Sonora'
+const APP_NAME = 'goldenstream'
 
 type AudiusArtwork = Record<string, string | string[] | undefined>
 

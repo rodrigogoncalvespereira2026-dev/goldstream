@@ -123,7 +123,7 @@ export function Home({ navigate }: { navigate: Navigate }) {
       </Section>
 
       <p className="page-footer">
-        Sonora é uma demonstração de player de música. As faixas são gravações livres do
+        O goldenstream é uma demonstração de player de música. As faixas são gravações livres do
         SoundHelix, usadas aqui apenas como conteúdo de exemplo.
       </p>
     </div>
