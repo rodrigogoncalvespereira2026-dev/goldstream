@@ -734,19 +734,40 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           return
         }
         failedTracksRef.current.delete(track.id)
+        try {
+          // Só o servidor, sem query: chega para saber de onde vem o áudio.
+          logNative('info', `fonte · ${new URL(src).host}`)
+        } catch {
+          logNative('info', 'fonte · endereço inválido')
+        }
 
         await logNativeCall('preload', NativeAudio.preload(nativeItem(track, src))).catch(() => {})
         if (cancelled) return
         nativeLoadedRef.current = track.id
-        // O volume do utilizador não viaja com a faixa: aplica-se ao player novo.
-        await NativeAudio.setVolume({
-          assetId: track.id,
-          volume: mutedRef.current ? 0.001 : Math.max(0.01, volumeRef.current),
-        }).catch(() => {})
+
+        // O `preload` regista o player de forma assíncrona: um `play` imediato ainda
+        // não encontra o asset e falha com "Audio Asset is missing" (era isto que
+        // deixava faixas do catálogo mudas). Insiste-se até o plugin o aceitar.
         // Tempo > 0: a 0 o plugin não reposiciona o player e, no fim, ignora o play.
-        await logNativeCall('play', NativeAudio.play({ assetId: track.id, time: 0.2 })).catch(
-          () => {},
-        )
+        const startVolume = Math.max(0.1, Math.min(1, volumeRef.current))
+        let started = false
+        for (let attempt = 0; attempt < 8 && !started && !cancelled; attempt += 1) {
+          if (attempt > 0) await new Promise((resolve) => window.setTimeout(resolve, 400))
+          started = await logNativeCall(
+            attempt === 0 ? 'play' : `play (tentativa ${attempt + 1})`,
+            NativeAudio.play({ assetId: track.id, time: 0.2, volume: startVolume }),
+          )
+            .then(() => true)
+            .catch(() => false)
+        }
+        if (!started) logNative('error', `play desistiu · ${track.title}`)
+        // O volume do utilizador não viaja com a faixa: aplica-se ao player novo.
+        if (started) {
+          void NativeAudio.setVolume({
+            assetId: track.id,
+            volume: mutedRef.current ? 0.001 : Math.max(0.01, volumeRef.current),
+          }).catch(() => {})
+        }
         setCurrentTime(0)
         logNative('info', `arranque enviado · ${track.title}`)
         // Guarda o player para o voltar a encontrar ao reabrir a app.
@@ -1067,7 +1088,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   }, [liked, recent])
 
   // Read real track lengths once so the lists show accurate durations.
+  // No telemóvel não: aqui cada sonda é um player a mais no WebView, a puxar metadata
+  // de todas as faixas ao mesmo tempo, a competir com o ExoPlayer e com a rede.
   useEffect(() => {
+    if (nativePlatform) return
     let cancelled = false
     const probes: HTMLAudioElement[] = []
     TRACKS.forEach((track) => {
@@ -1090,7 +1114,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         probe.removeAttribute('src')
       })
     }
-  }, [])
+  }, [nativePlatform])
 
   const addRecent = useCallback((id: string) => {
     setRecent((prev) => [id, ...prev.filter((item) => item !== id)].slice(0, 12))
