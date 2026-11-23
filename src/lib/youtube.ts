@@ -389,6 +389,11 @@ export async function resolveYouTubeAudio(
   return null
 }
 
+/** Esquece uma falha recente: a próxima tentativa volta a pedir o áudio ao YouTube. */
+export function forgetYouTubeAudioFailure(videoId: string) {
+  audioFailureCache.delete(videoId)
+}
+
 /* ---------------- relevância ---------------- */
 
 const normalizeText = (value: string): string =>

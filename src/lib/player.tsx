@@ -12,7 +12,13 @@ import { Capacitor } from '@capacitor/core'
 import { NativeAudio } from '@capgo/capacitor-native-audio'
 import { ALBUMS, TRACKS, getTrack, registerTracks, type Track } from './catalog'
 import { shuffleArray } from './format'
-import { getYT, loadYouTubeApi, resolveYouTubeAudio, type YTPlayer } from './youtube'
+import {
+  forgetYouTubeAudioFailure,
+  getYT,
+  loadYouTubeApi,
+  resolveYouTubeAudio,
+  type YTPlayer,
+} from './youtube'
 import { addListening, addPlay } from './stats'
 import { trackPlaybackRequest } from './analytics'
 
@@ -216,14 +222,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     isYouTube && current && !ytAudioSrc && !ytAudioFailed[current.id],
   )
   // Fora do nativo o som sai do elemento de áudio ou, em último caso, do iframe. No
-  // telemóvel manda o ExoPlayer; o iframe só entra quando a extração do áudio falhou,
-  // para a faixa não ficar muda.
-  const usesIframe = Boolean(
-    isYouTube &&
-      !ytAudioSrc &&
-      !ytAudioPending &&
-      (!nativePlatform || Boolean(current && ytAudioFailed[current.id])),
-  )
+  // telemóvel manda o ExoPlayer: o iframe do YouTube não toca dentro da app (ficava
+  // mudo a 0:00 e a música nunca passava à seguinte), por isso nunca é usado lá.
+  const usesIframe = Boolean(isYouTube && !ytAudioSrc && !ytAudioPending && !nativePlatform)
 
   const stateRef = useRef({ order, pos, repeat })
   stateRef.current = { order, pos, repeat }
@@ -307,9 +308,17 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           const activeId = index >= 0 ? list[index] : null
           if (assetId && assetId === activeId) {
             silenceNativeOthers(assetId)
-            void NativeAudio.resume({ assetId }).catch(() =>
-              NativeAudio.play({ assetId }).catch(() => {}),
-            )
+            const total = nativeDurationRef.current
+            // Player já no fim: `resume` não faz nada. Recomeçar do zero é o que o
+            // utilizador espera ao carregar em play depois de a faixa acabar.
+            if (total > 0 && currentTimeRef.current >= total - 1) {
+              setCurrentTime(0)
+              void NativeAudio.play({ assetId, time: 0 }).catch(() => {})
+            } else {
+              void NativeAudio.resume({ assetId }).catch(() =>
+                NativeAudio.play({ assetId, time: 0 }).catch(() => {}),
+              )
+            }
           }
           return
         }
@@ -510,7 +519,17 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           return
         }
         const nextIndex = list.indexOf(assetId)
-        if (nextIndex < 0) return
+        if (nextIndex < 0) {
+          // Uma fila antiga arrancou uma faixa que a app já não tem (lista mudou):
+          // cala-a e reconstrói a fila a partir do que está no ecrã, senão ficava
+          // tudo dessincronizado e a música parava sem se perceber porquê.
+          void NativeAudio.pause({ assetId }).catch(() => {})
+          nativeQueueActiveRef.current = false
+          nativeQueuedRef.current = new Set()
+          queueGenerationRef.current += 1
+          setQueueNonce((value) => value + 1)
+          return
+        }
         nativeLoadedRef.current = assetId
         nativeAdvancedRef.current = assetId
         nativePlayingRef.current.add(assetId)
@@ -772,14 +791,23 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
     void (async () => {
       if (!headQueued) {
-        const headSrc = await srcFor(current)
+        let headSrc = await srcFor(current)
+        // A extração do YouTube pode falhar à primeira (rede fria, resposta instável).
+        // No telemóvel vale insistir: ali não há iframe de reserva.
+        if (!headSrc && nativePlatform && current.provider === 'youtube') {
+          await new Promise((resolve) => window.setTimeout(resolve, 900))
+          if (queueGenerationRef.current !== generation) return
+          if (current.videoId) forgetYouTubeAudioFailure(current.videoId)
+          headSrc = await srcFor(current)
+        }
         if (queueGenerationRef.current !== generation) return
         if (!headSrc) {
           failedTracksRef.current.add(current.id)
 
-          // Faixa do YouTube sem áudio extraível: no telemóvel ainda toca no player
-          // do YouTube (em primeiro plano), em vez de ficar muda.
-          if (current.provider === 'youtube') {
+          // Faixa do YouTube sem áudio extraível: no browser ainda toca no player do
+          // YouTube. No telemóvel esse player fica mudo dentro da app, por isso a
+          // faixa entra no caminho normal de "não deu, passa à seguinte".
+          if (current.provider === 'youtube' && !nativePlatform) {
             nativeQueueActiveRef.current = false
             nativeQueuedRef.current = new Set()
             nativeLoadedRef.current = null
@@ -1343,6 +1371,53 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   const isLiked = useCallback((id: string) => liked.includes(id), [liked])
 
+  // O motor pode aceitar a faixa e ficar mudo a 0:00 (URL sem som, extração falhada):
+  // a barra ficava parada e a música nunca passava à seguinte. Aqui a app tenta
+  // recomeçar a faixa e, se continuar em silêncio, salta à frente.
+  useEffect(() => {
+    if (!nativePlatform || !nativeReady || usesIframe || !current || !isPlaying) return
+    const trackId = current.id
+    let cancelled = false
+    const timers: number[] = []
+
+    const stalled = async () => {
+      if (cancelled || !intentRef.current.play) return false
+      const state = await NativeAudio.getPlaybackState().catch(() => null)
+      if (cancelled || !state) return false
+      // Só é "mudo" se não está a tocar nem avançou: em pausa a posição é > 0.
+      return !state.isPlaying && (state.currentTime ?? 0) < 0.3
+    }
+
+    const heal = async () => {
+      if (!(await stalled())) return
+      const state = await NativeAudio.getPlaybackState().catch(() => null)
+      const assetId = state?.assetId ?? nativeLoadedRef.current
+      if (cancelled || !assetId) return
+      await NativeAudio.play({ assetId, time: 0 }).catch(() => {})
+      timers.push(
+        window.setTimeout(() => {
+          void (async () => {
+            if (!(await stalled())) return
+            failedTracksRef.current.add(trackId)
+            setPlayerNotice({
+              message: `Não consegui tocar “${current.title}”. A passar à seguinte…`,
+            })
+            nativeQueueActiveRef.current = false
+            nativeQueuedRef.current = new Set()
+            queueGenerationRef.current += 1
+            endedRef.current()
+          })()
+        }, 5000),
+      )
+    }
+
+    timers.push(window.setTimeout(() => void heal(), 3500))
+    return () => {
+      cancelled = true
+      timers.forEach((id) => window.clearTimeout(id))
+    }
+  }, [current, isPlaying, nativePlatform, nativeReady, usesIframe])
+
   const handleEnded = useCallback(() => {
     const { repeat: mode } = stateRef.current
     if (nativeQueueActiveRef.current) return
@@ -1351,6 +1426,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         const assetId = nativeLoadedRef.current
         if (assetId) {
           silenceNativeOthers(assetId)
+          setCurrentTime(0)
           void NativeAudio.play({ assetId, time: 0 }).catch(() => {})
         }
         return
