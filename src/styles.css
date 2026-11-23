@@ -4777,19 +4777,16 @@ img {
   color: var(--accent);
 }
 
-/* Registo do motor nativo: só aparece dentro do APK (ver NativeDebugLog). */
+/* Registo do motor nativo, dentro das Definições (ver NativeDebugLog). */
 .native-log {
-  position: fixed;
-  top: 56px;
-  left: 8px;
-  right: 8px;
-  z-index: 70;
-  font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  color: #f4f4f4;
-  background: rgba(8, 8, 8, 0.9);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 10px;
+  background: rgba(0, 0, 0, 0.35);
   overflow: hidden;
+  font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: #f4f4f4;
 }
 
 .native-log-head {
@@ -4798,10 +4795,10 @@ img {
   justify-content: space-between;
   gap: 8px;
   padding: 5px 8px;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.06);
+  color: #b9b9b9;
 }
 
-.native-log-toggle,
 .native-log-clear {
   font: inherit;
   color: var(--accent);
@@ -4814,7 +4811,7 @@ img {
   margin: 0;
   padding: 6px 8px 8px;
   list-style: none;
-  max-height: 34vh;
+  max-height: 260px;
   overflow-y: auto;
   white-space: pre-wrap;
   word-break: break-word;

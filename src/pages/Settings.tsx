@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { Section } from '../components/Cards'
 import { DownloadIcon, RefreshIcon, SparkleIcon } from '../components/Icons'
+import { NativeDebugLog } from '../components/NativeDebugLog'
 import { YouTubeLink } from '../components/YouTubeLink'
 import { BACKGROUNDS, useBackground } from '../lib/backgrounds'
 import { downloadUpdate, reloadApp } from '../lib/update'
@@ -165,6 +166,18 @@ export function Settings({ navigate }: { navigate: Navigate }) {
             <YouTubeLink />
           </Section>
         </div>
+
+        {Capacitor.isNativePlatform() && (
+          <div className="settings-card settings-card-wide">
+            <Section title="Registo do player" note="Diagnóstico no telemóvel">
+              <p className="settings-note">
+                O que o motor nativo está a fazer: estado, tempo, duração e erros de cada troca de
+                faixa. É apagado ao fechar a app.
+              </p>
+              <NativeDebugLog />
+            </Section>
+          </div>
+        )}
 
         <div className="settings-card">
           <Section title="Sobre" note="Informação da app">
