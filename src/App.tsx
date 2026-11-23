@@ -4,6 +4,7 @@ import { TopBar } from './components/TopBar'
 import { PlayerBar } from './components/PlayerBar'
 import { MobileNav } from './components/MobileNav'
 import { YouTubeStage } from './components/YouTubeStage'
+import { NativeDebugLog } from './components/NativeDebugLog'
 import { WatchVideo } from './components/WatchVideo'
 import { Home } from './pages/Home'
 import { Search } from './pages/Search'
@@ -199,6 +200,7 @@ function Shell() {
       <PlayerBar />
       <MobileNav view={view} navigate={navigate} />
       <YouTubeStage />
+      <NativeDebugLog />
       <WatchVideo />
     </div>
   )

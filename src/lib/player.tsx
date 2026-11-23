@@ -21,6 +21,7 @@ import {
 } from './youtube'
 import { addListening, addPlay } from './stats'
 import { trackPlaybackRequest } from './analytics'
+import { logNative, logNativeCall, secsText } from './nativeLog'
 
 type RepeatMode = 'off' | 'all' | 'one'
 
@@ -298,6 +299,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       nativeStaleRef.current.delete(keep ?? '')
       if (!ids.size) return
 
+      logNative('info', `calar ${ids.size} player(s)`)
+
       // Calar é imediato e não depende de nada: é isto que acaba com as duas
       // músicas a tocar ao mesmo tempo.
       ids.forEach((assetId) => {
@@ -320,7 +323,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           if (assetId === current) return
           nativeStaleRef.current.delete(assetId)
           nativeKnownRef.current.delete(assetId)
-          void NativeAudio.unload({ assetId }).catch(() => {})
+          logNative('info', `libertar ${assetId}`)
+          void logNativeCall('unload', NativeAudio.unload({ assetId })).catch(() => {})
         })
       })()
     },
@@ -368,10 +372,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
             // ele estiver no fim, o `play` é ignorado (a música ficava parada).
             if (total > 0 && currentTimeRef.current >= total - 1) {
               setCurrentTime(0)
-              void NativeAudio.play({ assetId, time: 0.2 }).catch(() => {})
+              void logNativeCall('play (no fim)', NativeAudio.play({ assetId, time: 0.2 })).catch(() => {})
             } else {
-              void NativeAudio.resume({ assetId }).catch(() =>
-                NativeAudio.play({ assetId, time: 0.2 }).catch(() => {}),
+              void logNativeCall('resume', NativeAudio.resume({ assetId })).catch(() =>
+                void logNativeCall('play (resume falhou)', NativeAudio.play({ assetId, time: 0.2 })).catch(
+                  () => {},
+                ),
               )
             }
           }
@@ -521,9 +527,14 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       // que é a peça que impede o Android de matar a música fora da app.
       showNotification: true,
       focus: true,
-    }).catch(() => {
-      /* configuração indisponível */
     })
+      .then(() => logNative('info', 'motor configurado'))
+      .catch((error: unknown) => {
+        logNative(
+          'error',
+          `configure → ${error instanceof Error ? error.message : String(error)}`,
+        )
+      })
 
     void (async () => {
       const timeListener = await NativeAudio.addListener('currentTime', (event) => {
@@ -532,6 +543,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       const completeListener = await NativeAudio.addListener('complete', (event) => {
         if (disposed) return
         const assetId = event.assetId
+        logNative('event', `fim · ${assetId ?? '—'}`)
         // Aviso de uma faixa que já não é a do ecrã (player antigo, parado ou
         // libertado): não pode mexer na reprodução nem avançar a fila.
         {
@@ -544,7 +556,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         if (assetId && stateRef.current.repeat === 'one') {
           silenceNativeOthers(assetId)
           // Tempo > 0 para o player recomeçar mesmo (a 0 o plugin não reposiciona).
-          void NativeAudio.play({ assetId, time: 0.2 }).catch(() => {})
+          void logNativeCall('play (repetir)', NativeAudio.play({ assetId, time: 0.2 })).catch(
+            () => {},
+          )
           setCurrentTime(0)
           return
         }
@@ -554,7 +568,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         if (assetId && Date.now() - seekedAtRef.current < 1500) {
           seekedAtRef.current = 0
           silenceNativeOthers(assetId)
-          void NativeAudio.play({ assetId, time: 0.2 }).catch(() => {})
+          void logNativeCall('play (passou do fim)', NativeAudio.play({ assetId, time: 0.2 })).catch(
+            () => {},
+          )
           setCurrentTime(0)
           return
         }
@@ -571,6 +587,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         if (disposed || usesIframeRef.current) return
         const assetId = event.assetId
         if (!assetId) return
+        logNative('event', `fila · ${assetId} (${event.reason ?? '—'})`)
         const { order: list, pos: index } = stateRef.current
         const appTrackId = index >= 0 ? list[index] : undefined
         const advanced = assetId !== appTrackId
@@ -602,6 +619,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       })
       const stateListener = await NativeAudio.addListener('playbackState', (event) => {
         if (disposed || usesIframeRef.current) return
+        logNative(
+          'event',
+          `estado ${event.isPlaying ? 'a tocar' : 'parado'} (${event.reason ?? '—'}) · ${secsText(
+            event.currentTime,
+          )}/${secsText(event.duration)}`,
+        )
         if (typeof event.currentTime === 'number') setCurrentTime(event.currentTime)
         if (typeof event.duration === 'number' && event.duration > 0) {
           nativeDurationRef.current = event.duration
@@ -651,6 +674,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     try {
       const state = await NativeAudio.getQueueState()
       const ids = state?.assetIds ?? []
+      logNative('info', `motor: ${ids.length} na fila · atual ${state?.assetId ?? '—'}`)
       // A fila do motor é a única fonte de verdade: guardamos tudo o que ele tem para
       // conseguir calar as faixas antigas quando o utilizador escolher outra.
       ids.forEach((id) => {
@@ -679,6 +703,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         : await NativeAudio.isPlaying({ assetId })
             .then((result) => result.isPlaying)
             .catch(() => restoredPlayingRef.current)
+      logNative('info', `adotado: ${playing ? 'a tocar' : 'parado'} · ${assetId}`)
       if (playing) nativePlayingRef.current.add(assetId)
       // A barra de progresso voltava a 0:00 ao reabrir; agora recupera o tempo real.
       if (snapshot) {
@@ -719,6 +744,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       let cancelled = false
 
       const run = async () => {
+        logNative('info', `pedido → ${track ? track.title : 'sem faixa'}${usesIframe ? ' (iframe)' : ''}`)
         if (!track || usesIframe) {
           nativeLoadedRef.current = null
           nativeQueueActiveRef.current = false
@@ -775,9 +801,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         // tocar a anterior com a app a mostrar a nova).
         const switched = nativeLoadedRef.current !== track.id
         if (switched) {
-          const selected = await NativeAudio.queueSelect({ assetId: track.id })
+          const selected = await logNativeCall(
+            'queueSelect',
+            NativeAudio.queueSelect({ assetId: track.id }),
+          )
             .then(() => true)
             .catch(() => false)
+          logNative('info', selected ? 'fila: faixa selecionada' : 'fila: seleção falhou')
           if (cancelled) {
             // Já foi escolhida outra faixa: esta não pode ficar a soar por cima.
             nativeStaleRef.current.add(track.id)
@@ -799,14 +829,18 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         // já ter chegado ao fim noutra volta e, a 0, o plugin não o reposiciona — o
         // `resume`/`play` era ignorado e a música ficava parada.
         if (switched) {
-          await NativeAudio.play({ assetId: track.id, time: 0.2 }).catch(() =>
-            NativeAudio.resume({ assetId: track.id }).catch(() => {}),
+          await logNativeCall(
+            'play (troca)',
+            NativeAudio.play({ assetId: track.id, time: 0.2 }),
+          ).catch(() =>
+            logNativeCall('resume (troca)', NativeAudio.resume({ assetId: track.id })).catch(() => {}),
           )
         } else {
-          await NativeAudio.resume({ assetId: track.id }).catch(() =>
-            NativeAudio.play({ assetId: track.id, time: 0.2 }).catch(() => {}),
+          await logNativeCall('resume', NativeAudio.resume({ assetId: track.id })).catch(() =>
+            logNativeCall('play 0.2', NativeAudio.play({ assetId: track.id, time: 0.2 })).catch(() => {}),
           )
         }
+        logNative('info', `arranque enviado · ${track.title}`)
         if (cancelled) {
           // Já foi escolhida outra faixa: esta não pode ficar a soar por cima.
           nativeStaleRef.current.add(track.id)
@@ -941,7 +975,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
         failedTracksRef.current.delete(current.id)
 
-        await NativeAudio.clearQueue().catch(() => {})
+        await logNativeCall('clearQueue', NativeAudio.clearQueue()).catch(() => {})
         // Outra troca de faixa já começou: esta entrega é antiga e não pode arrancar
         // som nenhum (duas músicas a tocar ao mesmo tempo).
         if (queueGenerationRef.current !== generation) return
@@ -957,13 +991,20 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         // Um só som: as faixas que ficaram da lista anterior são caladas agora.
         silenceNativeOthers(current.id)
 
-        const queued = await NativeAudio.setQueue({
-          items: [nativeItem(current, headSrc)],
-          startIndex: 0,
-          autoPlay: isPlayingRef.current,
-        })
+        const queued = await logNativeCall(
+          'setQueue',
+          NativeAudio.setQueue({
+            items: [nativeItem(current, headSrc)],
+            startIndex: 0,
+            autoPlay: isPlayingRef.current,
+          }),
+        )
           .then(() => true)
           .catch(() => false)
+        logNative(
+          'info',
+          `fila ${queued ? 'pronta' : 'falhou'} · ${current.title} · autoPlay=${isPlayingRef.current}`,
+        )
 
         // Motor sem fila (versão antiga do plugin): toca a faixa no modo simples,
         // para a música sair de qualquer maneira.
