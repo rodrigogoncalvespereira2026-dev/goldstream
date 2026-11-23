@@ -273,13 +273,39 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     [nativePlatform, nativeAssetIds],
   )
 
+  /**
+   * Cala tudo o que não seja a faixa indicada, incluindo o que o motor tem na fila.
+   * O plugin só pára o `currentlyPlayingAssetId` ao arrancar outra faixa: um player
+   * que tenha ficado por trás (entrega atrasada, fila antiga, app reaberta) continua
+   * a tocar. Esta é a barreira que garante uma só música de cada vez.
+   */
+  const stopNativeOthers = useCallback(
+    async (keep: string | null) => {
+      if (!nativePlatform) return
+      const ids = new Set(nativeAssetIds())
+      const state = await NativeAudio.getQueueState().catch(() => null)
+      state?.assetIds?.forEach((id) => ids.add(id))
+      if (state?.assetId) ids.add(state.assetId)
+      if (keep) ids.delete(keep)
+      ids.forEach((assetId) => {
+        nativePlayingRef.current.delete(assetId)
+        void NativeAudio.pause({ assetId }).catch(() => {})
+      })
+    },
+    [nativePlatform, nativeAssetIds],
+  )
+
   /** Manda o motor ativo calar/tocar já, sem esperar por efeitos nem pela fila. */
   const applyPlaybackNow = useCallback(
     (play: boolean) => {
       if (nativePlatform && !usesIframeRef.current) {
         if (play) {
           const assetId = nativeLoadedRef.current
-          if (assetId) {
+          // Só a faixa que o "agora tocando" mostra pode arrancar: se o motor aponta
+          // para uma faixa antiga, o efeito de carga trata da certa.
+          const { order: list, pos: index } = stateRef.current
+          const activeId = index >= 0 ? list[index] : null
+          if (assetId && assetId === activeId) {
             silenceNativeOthers(assetId)
             void NativeAudio.resume({ assetId }).catch(() =>
               NativeAudio.play({ assetId }).catch(() => {}),
@@ -290,6 +316,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         nativeAssetIds().forEach((assetId) => {
           void NativeAudio.pause({ assetId }).catch(() => {})
         })
+        // A fila do motor pode ter uma faixa que a app já não conhece: cala-a também.
+        void stopNativeOthers(null)
         return
       }
 
@@ -305,7 +333,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         /* player ainda não existe */
       }
     },
-    [nativePlatform, nativeAssetIds, silenceNativeOthers],
+    [nativePlatform, nativeAssetIds, silenceNativeOthers, stopNativeOthers],
   )
 
   const startSleepTimer = useCallback((minutes: number) => {
@@ -617,7 +645,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           nativeQueuedRef.current = new Set()
           queueGenerationRef.current += 1
           await NativeAudio.clearQueue().catch(() => {})
-          silenceNativeOthers(null)
+          await stopNativeOthers(null)
           return
         }
 
@@ -634,7 +662,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         // Carregou em pausa: cala tudo o que estiver carregado, mesmo que a fila
         // ainda não tenha chegado a esta faixa.
         if (!isPlaying) {
-          silenceNativeOthers(null)
+          await stopNativeOthers(null)
           return
         }
 
@@ -650,8 +678,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         // Ainda não está na fila: o efeito abaixo manda construi-la a partir daqui.
         if (!nativeQueuedRef.current.has(track.id)) return
 
-        // Uma só música de cada vez: cala o que tiver ficado para trás.
-        silenceNativeOthers(track.id)
+        // Uma só música de cada vez: cala o que tiver ficado para trás, incluindo
+        // players que a fila do motor ainda guarda.
+        await stopNativeOthers(track.id)
         nativePlayingRef.current.add(track.id)
         if (cancelled) return
 
@@ -714,6 +743,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     nativePlatform,
     nativeReady,
     silenceNativeOthers,
+    stopNativeOthers,
   ])
 
   /**
@@ -807,6 +837,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         // para a música sair de qualquer maneira.
         if (!queued) {
           nativeQueueActiveRef.current = false
+          // Motor sem fila: um só player, e só o desta faixa.
+          await stopNativeOthers(current.id)
           await NativeAudio.preload(nativeItem(current, headSrc)).catch(() => {})
           if (intentRef.current.play) {
             await NativeAudio.play({ assetId: current.id }).catch(() => {})
@@ -846,6 +878,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     usesIframe,
     queueNonce,
     silenceNativeOthers,
+    stopNativeOthers,
   ])
 
   // Trocar de faixa no nativo: o tempo e a duração da anterior não podem ficar na
@@ -862,6 +895,22 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     if (!nativePlatform || !currentId) return
     silenceNativeOthers(currentId)
   }, [currentId, nativePlatform, silenceNativeOthers])
+
+  // Vigilante: enquanto toca, nada além da faixa atual pode soar. Apanha os players
+  // que a fila do motor arrancou por trás (era isto que deixava duas músicas juntas).
+  useEffect(() => {
+    if (!nativePlatform || !isPlaying || usesIframe) return
+    const timer = window.setInterval(() => {
+      const { order: list, pos: index } = stateRef.current
+      const active = index >= 0 ? list[index] : null
+      nativePlayingRef.current.forEach((assetId) => {
+        if (assetId === active) return
+        nativePlayingRef.current.delete(assetId)
+        void NativeAudio.pause({ assetId }).catch(() => {})
+      })
+    }, 1500)
+    return () => window.clearInterval(timer)
+  }, [nativePlatform, isPlaying, usesIframe])
 
   // Repetir também é do motor nativo (uma faixa, a lista toda, ou nada).
   useEffect(() => {
