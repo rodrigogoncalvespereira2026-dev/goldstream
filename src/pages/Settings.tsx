@@ -5,7 +5,14 @@ import { DownloadIcon, RefreshIcon, SparkleIcon } from '../components/Icons'
 import { NativeDebugLog } from '../components/NativeDebugLog'
 import { YouTubeLink } from '../components/YouTubeLink'
 import { BACKGROUNDS, useBackground } from '../lib/backgrounds'
-import { downloadUpdate, reloadApp } from '../lib/update'
+import {
+  downloadUpdate,
+  haVersaoNova,
+  instalarAtualizacao,
+  reloadApp,
+  versaoPublicada,
+} from '../lib/update'
+import { VERSAO_APP } from '../lib/versaoApp'
 import { saveAccountData, signOut, useAccount } from '../lib/account'
 import { setConsentPreferences, useConsentPreferences } from '../lib/analytics'
 import type { Navigate } from '../lib/nav'
@@ -90,11 +97,39 @@ export function Settings({ navigate }: { navigate: Navigate }) {
                 type="button"
                 className="connect-button settings-action"
                 onClick={async () => {
-                  setUpdateNote('A abrir o Chrome para transferir…')
+                  setUpdateNote('A procurar atualização…')
+                  const publicada = await versaoPublicada()
+                  if (!publicada) {
+                    setUpdateNote(`Sem ligação ao servidor. Está na versão ${VERSAO_APP.nome}.`)
+                    return
+                  }
+                  if (!haVersaoNova(publicada)) {
+                    setUpdateNote(`Já tem a ${VERSAO_APP.nome}, que é a mais recente.`)
+                    return
+                  }
+                  setUpdateNote(`A instalar a ${publicada.versao}…`)
+                  try {
+                    await instalarAtualizacao()
+                    setUpdateNote('Instalador aberto. Confirma a instalação para terminar.')
+                  } catch (falha) {
+                    setUpdateNote(
+                      falha instanceof Error ? falha.message : 'Não consegui atualizar agora.',
+                    )
+                  }
+                }}
+              >
+                <DownloadIcon size={18} />
+                Verificar atualização
+              </button>
+              <button
+                type="button"
+                className="ghost-button settings-action"
+                onClick={async () => {
+                  setUpdateNote('A abrir o download do APK…')
                   try {
                     await downloadUpdate()
                     setUpdateNote(
-                      'Download iniciado. Quando terminar, abre a notificação para instalar a atualização.',
+                      'Download iniciado. Quando terminar, abre a notificação para instalar.',
                     )
                   } catch {
                     setUpdateNote('Não consegui abrir o download. Tenta de novo daqui a pouco.')
@@ -102,7 +137,7 @@ export function Settings({ navigate }: { navigate: Navigate }) {
                 }}
               >
                 <DownloadIcon size={18} />
-                Baixar atualização
+                Baixar o APK
               </button>
               <button type="button" className="ghost-button settings-action" onClick={reloadApp}>
                 <RefreshIcon size={18} />
@@ -186,6 +221,7 @@ export function Settings({ navigate }: { navigate: Navigate }) {
               SoundHelix; as pesquisas consultam Audius e YouTube.
             </p>
             <div className="settings-tech-list">
+              <span>Versão <strong>{VERSAO_APP.nome}</strong></span>
               <span>Áudio <strong>{Capacitor.isPluginAvailable('NativeAudio') ? 'Nativo' : 'Navegador'}</strong></span>
               <span>YouTube <strong>{Capacitor.isPluginAvailable('YouTubeAudio') ? 'Nativo' : 'Indisponível'}</strong></span>
               <span>Atualização <strong>{Capacitor.isPluginAvailable('AppUpdate') ? 'Nativa' : 'Indisponível'}</strong></span>

@@ -4832,3 +4832,68 @@ img {
 .native-log-error {
   color: #ff8f7a;
 }
+
+/* Aviso de versão nova dentro do APK (comparação com /versao.json). */
+.update-banner {
+  position: fixed;
+  z-index: 10001;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(420px, calc(100vw - 24px));
+  padding: 16px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  background: #202020;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+}
+
+.update-banner-close {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  border: 0;
+  padding: 4px 6px;
+  background: none;
+  color: var(--muted);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.update-banner-eyebrow {
+  margin: 0 0 6px;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.update-banner-copy {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.update-banner-list {
+  margin: 0 0 12px;
+  padding-left: 18px;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.update-banner-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.update-banner-error {
+  margin: 10px 0 0;
+  color: #ff8f7a;
+  font-size: 12px;
+  line-height: 1.5;
+}

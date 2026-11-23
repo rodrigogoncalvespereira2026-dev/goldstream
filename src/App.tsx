@@ -26,6 +26,7 @@ import {
   useConsentPreferences,
 } from './lib/analytics'
 import { PrivacyConsent } from './components/PrivacyConsent'
+import { UpdateBanner } from './components/UpdateBanner'
 import { GENRES, getAlbum, getPlaylist } from './lib/catalog'
 import { cx } from './lib/format'
 import type { View } from './lib/nav'
@@ -235,6 +236,7 @@ export default function App() {
       <>
         <Auth />
         <PrivacyConsent />
+        <UpdateBanner />
       </>
     )
   }
@@ -245,6 +247,7 @@ export default function App() {
         <Shell />
       </PlayerProvider>
       <PrivacyConsent />
+      <UpdateBanner />
     </>
   )
 }

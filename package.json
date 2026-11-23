@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "npm run versao && tsc --noEmit && vite build",
+    "versao": "node scripts/versao.mjs",
     "preview": "vite preview",
     "android:sync": "npm run build && rm -f dist/goldenstream.apk && npx cap sync android",
     "android:open": "npx cap open android",
