@@ -85,8 +85,19 @@ const KEYS = {
 }
 
 /** Última fila/faixa mostrada, para voltar a aparecer ao reabrir a app. */
-const readPlayerState = (): { order: string[]; pos: number; playing: boolean } => {
-  const saved = readStored<{ order?: unknown; pos?: unknown; playing?: unknown }>(KEYS.player, {})
+const readPlayerState = (): {
+  order: string[]
+  pos: number
+  playing: boolean
+  /** Player nativo que estava carregado (para o reencontrar ao reabrir a app). */
+  assetId: string | null
+} => {
+  const saved = readStored<{
+    order?: unknown
+    pos?: unknown
+    playing?: unknown
+    assetId?: unknown
+  }>(KEYS.player, {})
   const raw = Array.isArray(saved.order) ? saved.order : []
   const ids = raw.filter(
     (id): id is string => typeof id === 'string' && Boolean(getTrack(id)),
@@ -96,6 +107,8 @@ const readPlayerState = (): { order: string[]; pos: number; playing: boolean } =
     order: ids,
     pos: index >= 0 && index < ids.length ? index : -1,
     playing: saved.playing === true,
+    assetId:
+      typeof saved.assetId === 'string' && getTrack(saved.assetId) ? saved.assetId : null,
   }
 }
 
@@ -151,33 +164,21 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const ytTimerRef = useRef<number | null>(null)
   /** No telemóvel o áudio toca no motor nativo (ExoPlayer), que sobrevive ao ecrã bloqueado. */
   const nativePlatform = Capacitor.isNativePlatform()
+  /**
+   * O único player do motor nativo: o `assetId` que está carregado agora. Toda a
+   * reprodução passa por aqui e a anterior é calada e libertada antes de a nova
+   * carregar, por isso nunca existe mais de um ExoPlayer vivo. Sem fila do plugin:
+   * quem decide a próxima faixa é o JavaScript, no evento de fim.
+   */
   const nativeLoadedRef = useRef<string | null>(null)
-  /** Assets do motor nativo que ainda estão carregados (têm de ser calados ao trocar). */
-  const nativePlayingRef = useRef<Set<string>>(new Set())
-  /** Fila do motor nativo: impede dois preload/play ao mesmo tempo para a mesma faixa. */
+  /** Fila de operações do motor: impede dois arranques ao mesmo tempo. */
   const nativeQueueRef = useRef<Promise<void>>(Promise.resolve())
-  /** Fila nativa ativa: o ExoPlayer toca e avança a lista sozinho, mesmo bloqueado. */
-  const nativeQueueActiveRef = useRef(false)
-  /** Faixas já entregues à fila nativa. */
-  const nativeQueuedRef = useRef<Set<string>>(new Set())
-  /** Muda sempre que a fila nativa é reconstruída (cancela abastecimentos antigos). */
-  const queueGenerationRef = useRef(0)
   /** Duração que o motor nativo reporta para a faixa atual (para limitar o arrasto). */
   const nativeDurationRef = useRef(0)
   /** Quando o utilizador arrastou a barra pela última vez. */
   const seekedAtRef = useRef(0)
-  /** Faixa que a própria fila nativa começou (não precisa de ser tocada outra vez). */
-  const nativeAdvancedRef = useRef<string | null>(null)
-  /**
-   * Todos os assets que o motor nativo já teve. Serve para calar o que ficou a tocar
-   * noutro player depois de a app reabrir: sem isto, a faixa antiga continuava e a nova
-   * arrancava por cima (duas músicas ao mesmo tempo).
-   */
-  const nativeKnownRef = useRef<Set<string>>(new Set())
   /** Faixa adotada do motor ao reabrir a app: já toca, não pode ser mandada arrancar outra vez. */
   const adoptedRef = useRef<string | null>(null)
-  /** Faixas que foram caladas e cujo player ainda tem de ser libertado (unload). */
-  const nativeStaleRef = useRef<Set<string>>(new Set())
   /** Último "complete" tratado: o plugin emite-o duas vezes para a mesma faixa. */
   const completedRef = useRef<{ assetId: string | null; at: number }>({ assetId: null, at: 0 })
   /**
@@ -255,145 +256,54 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   }, [])
 
   /**
-   * Players que o motor nativo tem mesmo carregados. Os ids que só estão na fila nunca
-   * tocaram: pedir `pause`/`unload` a esses é uma chamada a falhar por cada um (chegavam
-   * a ser 11 por troca) e atrasava a troca de faixa.
+   * Cala e liberta (unload) um player do motor nativo. É isto que garante um só
+   * ExoPlayer: a faixa anterior deixa de existir antes de a próxima carregar.
    */
-  const loadedNativeIds = useCallback((): string[] => {
-    const ids = new Set(nativePlayingRef.current)
-    if (nativeLoadedRef.current) ids.add(nativeLoadedRef.current)
-    return Array.from(ids)
-  }, [])
-
-  /**
-   * Cala tudo menos a faixa indicada. Cada faixa do plugin nativo tem o seu próprio
-   * player: sem isto, a faixa anterior continuava a tocar em cima da nova.
-   */
-  const silenceNativeOthers = useCallback(
-    (keep: string | null) => {
-      if (!nativePlatform) return
-      loadedNativeIds().forEach((assetId) => {
-        if (assetId === keep) return
-        nativePlayingRef.current.delete(assetId)
-        nativeStaleRef.current.add(assetId)
-        void NativeAudio.pause({ assetId }).catch(() => {})
-      })
-    },
-    [nativePlatform, loadedNativeIds],
-  )
-
-  /**
-   * Liberta (unload) os players das faixas que já não são a atual. Duas razões:
-   * o plugin, ao parar a faixa anterior, volta a preparar o player dela com o mesmo
-   * URL e ele arranca outra vez sozinho (era isto que punha duas músicas a tocar ao
-   * mesmo tempo ao trocar de faixa); e os players nunca eram libertados, por isso a
-   * app ia acumulando ExoPlayers até ficar travada.
-   *
-   * Só pode ser chamado depois de a faixa nova já estar a tocar: o plugin precisa da
-   * anterior ainda carregada na lista para a poder parar.
-   */
-  const releaseNativeOthers = useCallback(
-    (keep: string | null, confirmedCurrent?: string) => {
-      if (!nativePlatform) return
-      const ids = new Set(nativePlayingRef.current)
-      nativeStaleRef.current.forEach((id) => ids.add(id))
-      if (nativeLoadedRef.current) ids.add(nativeLoadedRef.current)
-      ids.delete(keep ?? '')
-      // A faixa atual nunca pode ser calada nem libertada por aqui.
-      nativeStaleRef.current.delete(keep ?? '')
-      if (!ids.size) return
-
-      logNative('info', `calar ${ids.size} player(s)`)
-
-      // Calar é imediato e não depende de nada: é isto que acaba com as duas
-      // músicas a tocar ao mesmo tempo.
-      ids.forEach((assetId) => {
-        nativePlayingRef.current.delete(assetId)
-        if (nativeLoadedRef.current === assetId) nativeLoadedRef.current = keep
-        void NativeAudio.pause({ assetId }).catch(() => {})
-      })
-
-      // Só se liberta (unload) o que o motor confirma que já não é a faixa atual: um
-      // player libertado que o plugin continue a considerar `currentlyPlayingAssetId`
-      // faz todas as trocas seguintes falharem e a música deixa de tocar. Sem
-      // confirmação fica só a pausa — silêncio garantido, player libertado na
-      // próxima troca em que for seguro.
-      void (async () => {
-        // A resposta do setQueue/queueSelect já diz qual é a faixa atual: usá-la evita
-        // esperar por mais uma chamada (eram ~3 s com o player antigo a soar).
-        const current =
-          confirmedCurrent ??
-          (await NativeAudio.getQueueState().catch(() => null))?.assetId ??
-          null
-        // Sem faixa atual confirmada (fila vazia) não se liberta nada.
-        if (!current) return
-        ids.forEach((assetId) => {
-          if (assetId === current) return
-          nativeStaleRef.current.delete(assetId)
-          nativeKnownRef.current.delete(assetId)
-          logNative('info', `libertar ${assetId}`)
-          void logNativeCall('unload', NativeAudio.unload({ assetId })).catch(() => {})
-        })
-      })()
+  const dropNativeAsset = useCallback(
+    async (assetId: string | null) => {
+      if (!nativePlatform || !assetId) return
+      logNative('info', `parar e libertar ${assetId}`)
+      await logNativeCall('pause', NativeAudio.pause({ assetId })).catch(() => {})
+      await logNativeCall('unload', NativeAudio.unload({ assetId })).catch(() => {})
+      if (nativeLoadedRef.current === assetId) nativeLoadedRef.current = null
+      // Já não existe: voltar a esta faixa tem de carregar um player novo.
+      if (adoptedRef.current === assetId) adoptedRef.current = null
     },
     [nativePlatform],
-  )
-
-  /**
-   * Cala tudo o que não seja a faixa indicada, incluindo o que o motor tem na fila.
-   * O plugin só pára o `currentlyPlayingAssetId` ao arrancar outra faixa: um player
-   * que tenha ficado por trás (entrega atrasada, fila antiga, app reaberta) continua
-   * a tocar. Esta é a barreira que garante uma só música de cada vez.
-   */
-  const stopNativeOthers = useCallback(
-    async (keep: string | null) => {
-      if (!nativePlatform) return
-      const ids = new Set(loadedNativeIds())
-      const state = await NativeAudio.getQueueState().catch(() => null)
-      state?.assetIds?.forEach((id) => ids.add(id))
-      if (state?.assetId) ids.add(state.assetId)
-      if (keep) ids.delete(keep)
-      ids.forEach((assetId) => {
-        nativePlayingRef.current.delete(assetId)
-        void NativeAudio.pause({ assetId }).catch(() => {})
-      })
-    },
-    [nativePlatform, loadedNativeIds],
   )
 
   /** Manda o motor ativo calar/tocar já, sem esperar por efeitos nem pela fila. */
   const applyPlaybackNow = useCallback(
     (play: boolean) => {
       if (nativePlatform && !usesIframeRef.current) {
+        const assetId = nativeLoadedRef.current
+        const { order: list, pos: index } = stateRef.current
+        const activeId = index >= 0 ? list[index] : null
         if (play) {
-          const assetId = nativeLoadedRef.current
-          // Só a faixa que o "agora tocando" mostra pode arrancar: se o motor aponta
-          // para uma faixa antiga, o efeito de carga trata da certa.
-          const { order: list, pos: index } = stateRef.current
-          const activeId = index >= 0 ? list[index] : null
+          // Só a faixa que o "agora tocando" mostra pode arrancar.
           if (assetId && assetId === activeId) {
-            silenceNativeOthers(assetId)
             const total = nativeDurationRef.current
-            // Player já no fim: `resume` não faz nada. Recomeçar do zero é o que o
-            // utilizador espera ao carregar em play depois de a faixa acabar.
-            // Sempre com um tempo > 0: a 0 o plugin não reposiciona o player e, se
-            // ele estiver no fim, o `play` é ignorado (a música ficava parada).
+            // Player no fim: `resume` não faz nada. Sempre com tempo > 0, porque a 0
+            // o plugin não reposiciona o player e o pedido é ignorado.
             if (total > 0 && currentTimeRef.current >= total - 1) {
               setCurrentTime(0)
-              void logNativeCall('play (no fim)', NativeAudio.play({ assetId, time: 0.2 })).catch(() => {})
+              void logNativeCall('play (no fim)', NativeAudio.play({ assetId, time: 0.2 })).catch(
+                () => {},
+              )
             } else {
               void logNativeCall('resume', NativeAudio.resume({ assetId })).catch(() =>
-                void logNativeCall('play (resume falhou)', NativeAudio.play({ assetId, time: 0.2 })).catch(
+                logNativeCall('play (resume falhou)', NativeAudio.play({ assetId, time: 0.2 })).catch(
                   () => {},
                 ),
               )
             }
+            return
           }
+          // Não há player desta faixa (foi libertado): o efeito de carga arranca-o.
+          setQueueNonce((value) => value + 1)
           return
         }
-        silenceNativeOthers(null)
-        // A fila do motor pode ter uma faixa que a app já não conhece: cala-a também.
-        void stopNativeOthers(null)
+        if (assetId) void logNativeCall('pause', NativeAudio.pause({ assetId })).catch(() => {})
         return
       }
 
@@ -409,7 +319,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         /* player ainda não existe */
       }
     },
-    [nativePlatform, silenceNativeOthers, stopNativeOthers],
+    [nativePlatform],
   )
 
   const startSleepTimer = useCallback((minutes: number) => {
@@ -568,9 +478,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           if (assetId && activeId && assetId !== activeId) return
         }
 
-        // Repetir a mesma faixa: voltar a tocar do início (sem mais nada a tocar).
+        // Repetir a mesma faixa: voltar a tocar do início (o player é o mesmo).
         if (assetId && stateRef.current.repeat === 'one') {
-          silenceNativeOthers(assetId)
           // Tempo > 0 para o player recomeçar mesmo (a 0 o plugin não reposiciona).
           void logNativeCall('play (repetir)', NativeAudio.play({ assetId, time: 0.2 })).catch(
             () => {},
@@ -583,7 +492,6 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         // Volta a tocar a mesma em vez de saltar para outra música.
         if (assetId && Date.now() - seekedAtRef.current < 1500) {
           seekedAtRef.current = 0
-          silenceNativeOthers(assetId)
           void logNativeCall('play (passou do fim)', NativeAudio.play({ assetId, time: 0.2 })).catch(
             () => {},
           )
@@ -591,47 +499,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           return
         }
 
-        // O plugin só emite "complete" quando NÃO conseguiu passar à faixa
-        // seguinte (fim da fila). Antes ficávamos à espera de um avanço que
-        // nunca vinha — a música travava. Agora a app assume a próxima.
-        nativeQueueActiveRef.current = false
-        nativeQueuedRef.current = new Set()
-        queueGenerationRef.current += 1
+        // Não há fila do plugin: no fim da faixa é a app que decide a próxima
+        // (o efeito de carga cala e liberta este player e arranca o da seguinte).
         endedRef.current()
-      })
-      const queueListener = await NativeAudio.addListener('queueChange', (event) => {
-        if (disposed || usesIframeRef.current) return
-        const assetId = event.assetId
-        if (!assetId) return
-        logNative('event', `fila · ${assetId} (${event.reason ?? '—'})`)
-        const { order: list, pos: index } = stateRef.current
-        const appTrackId = index >= 0 ? list[index] : undefined
-        const advanced = assetId !== appTrackId
-        if (!advanced) {
-          // Só confirma a faixa que já estava escolhida; não mexe na pausa.
-          if (intentRef.current.play) setIsPlaying(true)
-          return
-        }
-        const nextIndex = list.indexOf(assetId)
-        if (nextIndex < 0) {
-          // Uma fila antiga arrancou uma faixa que a app já não tem (lista mudou):
-          // cala-a e reconstrói a fila a partir do que está no ecrã, senão ficava
-          // tudo dessincronizado e a música parava sem se perceber porquê.
-          void NativeAudio.pause({ assetId }).catch(() => {})
-          nativeQueueActiveRef.current = false
-          nativeQueuedRef.current = new Set()
-          queueGenerationRef.current += 1
-          setQueueNonce((value) => value + 1)
-          return
-        }
-        nativeLoadedRef.current = assetId
-        nativeAdvancedRef.current = assetId
-        nativePlayingRef.current.add(assetId)
-        nativeKnownRef.current.add(assetId)
-        setPos(nextIndex)
-        setCurrentTime(0)
-        addRecentRef.current(assetId)
-        if (intentRef.current.play || event.reason !== 'setQueue') setIsPlaying(true)
       })
       const stateListener = await NativeAudio.addListener('playbackState', (event) => {
         if (disposed || usesIframeRef.current) return
@@ -661,7 +531,6 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       cleanups.push(
         () => void timeListener.remove(),
         () => void completeListener.remove(),
-        () => void queueListener.remove(),
         () => void stateListener.remove(),
       )
     })()
@@ -675,54 +544,42 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // Guarda a faixa em curso para o "agora tocando" voltar a aparecer ao reabrir a app.
   useEffect(() => {
     if (!order.length || pos < 0) return
-    store(KEYS.player, { order, pos, playing: isPlaying })
-  }, [order, pos, isPlaying])
-
-  /** Valor de reprodução que estava guardado quando a app arrancou. */
-  const restoredPlayingRef = useRef(readPlayerState().playing)
+    store(KEYS.player, {
+      order,
+      pos,
+      playing: isPlaying,
+      assetId: nativePlatform ? nativeLoadedRef.current : null,
+    })
+  }, [order, pos, isPlaying, nativePlatform])
 
   /**
-   * Ao reabrir a app o serviço nativo pode continuar a tocar. Adota a faixa que o
-   * motor tem (para o botão de pausa funcionar) e acerta o ecrã com ela.
+   * Ao reabrir a app o serviço nativo pode continuar a tocar a faixa que estava. Sem
+   * fila, a memória do player é o id guardado no telemóvel: perguntamos ao motor pelo
+   * estado dele e acertamos o ecrã.
    */
-  const syncFromNative = useCallback(async () => {
-    if (!nativePlatform) return
-    try {
-      const state = await NativeAudio.getQueueState()
-      const ids = state?.assetIds ?? []
-      logNative('info', `motor: ${ids.length} na fila · atual ${state?.assetId ?? '—'}`)
-      // A fila do motor é a única fonte de verdade: guardamos tudo o que ele tem para
-      // conseguir calar as faixas antigas quando o utilizador escolher outra.
-      ids.forEach((id) => {
-        nativeQueuedRef.current.add(id)
-        nativeKnownRef.current.add(id)
-      })
-      const assetId = state?.assetId
-      if (!assetId || !getTrack(assetId)) return
-      nativeLoadedRef.current = assetId
-      nativePlayingRef.current.add(assetId)
-      nativeKnownRef.current.add(assetId)
-      nativeQueueActiveRef.current = true
-      adoptedRef.current = assetId
-      const stored = stateRef.current.order
-      const storedIndex = stored.indexOf(assetId)
-      const nativeIndex = ids.indexOf(assetId)
-      // Se a faixa em curso não está na ordem guardada, a ordem certa é a do motor —
-      // não uma lista nova que escondia o que estava a tocar.
-      setOrder(storedIndex >= 0 ? stored : ids.length ? ids : [assetId, ...stored])
-      setPos(storedIndex >= 0 ? storedIndex : Math.max(0, nativeIndex))
-      // O estado real do motor é que decide o botão tocar/pausa. O valor guardado no
-      // telefone podia estar desatualizado (ex.: mudou de faixa com a app fechada).
-      const snapshot = await NativeAudio.getPlaybackState({ assetId }).catch(() => null)
-      const playing = snapshot
-        ? snapshot.isPlaying
-        : await NativeAudio.isPlaying({ assetId })
-            .then((result) => result.isPlaying)
-            .catch(() => restoredPlayingRef.current)
-      logNative('info', `adotado: ${playing ? 'a tocar' : 'parado'} · ${assetId}`)
-      if (playing) nativePlayingRef.current.add(assetId)
-      // A barra de progresso voltava a 0:00 ao reabrir; agora recupera o tempo real.
-      if (snapshot) {
+  const syncFromNative = useCallback(
+    async (kick = false) => {
+      if (!nativePlatform) return
+      try {
+        // Sem fila: a memória do player que ficou a tocar é o id guardado no telemóvel.
+        const assetId = readPlayerState().assetId
+        if (!assetId) {
+          logNative('info', 'motor: sem player guardado')
+          return
+        }
+        const snapshot = await NativeAudio.getPlaybackState({ assetId }).catch(() => null)
+        if (!snapshot) {
+          logNative('info', `motor: player ${assetId} já não existe`)
+          if (nativeLoadedRef.current === assetId) nativeLoadedRef.current = null
+          return
+        }
+        nativeLoadedRef.current = assetId
+        adoptedRef.current = assetId
+        const index = stateRef.current.order.indexOf(assetId)
+        if (index >= 0) setPos(index)
+        const playing = snapshot.isPlaying
+        logNative('info', `motor: ${assetId} · ${playing ? 'a tocar' : 'parado'}`)
+        // A barra de progresso recupera o tempo real em vez de voltar a 0:00.
         if (typeof snapshot.currentTime === 'number' && snapshot.currentTime > 0) {
           setCurrentTime(snapshot.currentTime)
         }
@@ -730,21 +587,40 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           nativeDurationRef.current = snapshot.duration
           setDuration(snapshot.duration)
         }
+        // Ao voltar à app o Android pode ter pausado o player e o plugin não retoma
+        // sozinho. Se o utilizador quer música, arranca-se em vez de ficar parado.
+        if (kick && intentRef.current.play && !playing) {
+          const total = nativeDurationRef.current
+          const atEnd = total > 0 && currentTimeRef.current >= total - 1
+          if (atEnd) {
+            setCurrentTime(0)
+            void logNativeCall('play (voltar)', NativeAudio.play({ assetId, time: 0.2 })).catch(
+              () => {},
+            )
+          } else {
+            void logNativeCall('resume (voltar)', NativeAudio.resume({ assetId })).catch(() =>
+              NativeAudio.play({ assetId, time: 0.2 }).catch(() => {}),
+            )
+          }
+          setIntent(true)
+        } else {
+          setIntent(playing)
+        }
+      } catch {
+        /* motor indisponível */
+      } finally {
+        // A partir daqui os efeitos já podem mandar no motor.
+        setNativeReady(true)
       }
-      setIntent(playing)
-    } catch {
-      /* sem fila ativa */
-    } finally {
-      // A partir daqui os efeitos já podem mandar no motor.
-      setNativeReady(true)
-    }
-  }, [nativePlatform, setIntent])
+    },
+    [nativePlatform, setIntent],
+  )
 
   useEffect(() => {
     if (!nativePlatform) return
     void syncFromNative()
     const onVisible = () => {
-      if (document.visibilityState === 'visible') void syncFromNative()
+      if (document.visibilityState === 'visible') void syncFromNative(true)
     }
     document.addEventListener('visibilitychange', onVisible)
     return () => document.removeEventListener('visibilitychange', onVisible)
@@ -753,126 +629,119 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // Load the selected track and honour the play/pause intent.
   useEffect(() => {
     if (nativePlatform) {
-      // Antes de adotar a fila nativa, mexer no motor calava a música que já estava a
-      // tocar (ou deixava a antiga por baixo). Esperar pelo syncFromNative.
+      // Antes de adotar o player guardado, mexer no motor calava a música que já
+      // estava a tocar. Esperar pelo syncFromNative.
       if (!nativeReady) return
       const track = current
       let cancelled = false
 
+      const srcFor = async (target: Track): Promise<string | null> => {
+        if (target.videoId) {
+          const direct = ytAudioRef.current[target.id]
+          if (direct) return direct
+          return resolveYouTubeAudio(target.videoId)
+        }
+        return target.src || null
+      }
+
       const run = async () => {
-        logNative('info', `pedido → ${track ? track.title : 'sem faixa'}${usesIframe ? ' (iframe)' : ''}`)
+        logNative(
+          'info',
+          `pedido → ${track ? track.title : 'sem faixa'}${usesIframe ? ' (iframe)' : ''}`,
+        )
         if (!track || usesIframe) {
-          nativeLoadedRef.current = null
-          nativeQueueActiveRef.current = false
-          nativeQueuedRef.current = new Set()
-          queueGenerationRef.current += 1
-          await NativeAudio.clearQueue().catch(() => {})
-          void stopNativeOthers(null)
+          await dropNativeAsset(nativeLoadedRef.current)
           return
         }
 
-        // A fila nativa arrancou esta faixa sozinha (passou de faixa): só acertar o estado.
-        if (nativeAdvancedRef.current === track.id) {
-          nativeAdvancedRef.current = null
-          nativeLoadedRef.current = track.id
-          nativePlayingRef.current.add(track.id)
-          silenceNativeOthers(track.id)
-          // A faixa anterior já acabou: o player dela é libertado já, senão o
-          // ExoPlayer antigo voltava a soar e a app acumulava players.
-          releaseNativeOthers(track.id)
-          setCurrentTime(0)
-          if (isPlaying) return
-        }
-
-        // Carregou em pausa: cala tudo o que estiver carregado, mesmo que a fila
-        // ainda não tenha chegado a esta faixa.
-        if (!isPlaying) {
-          silenceNativeOthers(null)
-          void stopNativeOthers(null)
-          return
-        }
-
-        // Faixa adotada do motor ao reabrir a app: já está a tocar. Mandá-la arrancar
-        // outra vez recomeçava do início e podia soar em duplicado.
+        // Faixa adotada do motor ao reabrir a app: já está a tocar, não se recomeça.
         if (adoptedRef.current === track.id) {
           adoptedRef.current = null
           nativeLoadedRef.current = track.id
-          silenceNativeOthers(track.id)
           return
         }
 
-        // Ainda não está na fila: o efeito abaixo manda construi-la a partir daqui.
-        if (!nativeQueuedRef.current.has(track.id)) return
-
-        // Uma só música de cada vez: cala já o que ficou para trás. O `pause` também
-        // impede que o player antigo arranque outra vez quando o plugin o recarrega
-        // para o parar. A varredura do que a fila do motor guarda segue sem prender a
-        // troca (era isso que deixava a app travada ao mudar de música).
-        silenceNativeOthers(track.id)
-        void stopNativeOthers(track.id)
-        nativePlayingRef.current.add(track.id)
+        // Pausa: fica o player desta faixa (o play é imediato) e sai o anterior.
+        if (!isPlaying) {
+          const loaded = nativeLoadedRef.current
+          if (loaded && loaded !== track.id) await dropNativeAsset(loaded)
+          return
+        }
         if (cancelled) return
 
-        // É outra faixa da fila: o ExoPlayer tem de mudar para ela (senão ficava a
-        // tocar a anterior com a app a mostrar a nova).
-        const switched = nativeLoadedRef.current !== track.id
-        let confirmedCurrent: string | undefined
-        if (switched) {
-          const selectedState = await logNativeCall(
-            'queueSelect',
-            NativeAudio.queueSelect({ assetId: track.id }),
-          ).catch(() => null)
-          const selected = Boolean(selectedState)
-          confirmedCurrent = selectedState?.assetId
-          logNative(
-            'info',
-            selected
-              ? `fila: selecionada · atual ${selectedState?.assetId ?? '—'}`
-              : 'fila: seleção falhou',
-          )
-          if (cancelled) {
-            // Já foi escolhida outra faixa: esta não pode ficar a soar por cima.
-            nativeStaleRef.current.add(track.id)
-            void NativeAudio.pause({ assetId: track.id }).catch(() => {})
-            return
+        // Já é esta a faixa carregada: só falta garantir que anda.
+        if (nativeLoadedRef.current === track.id) {
+          const total = nativeDurationRef.current
+          if (total > 0 && currentTimeRef.current >= total - 1) {
+            // Player no fim da faixa: recomeçar do início.
+            setCurrentTime(0)
+            await logNativeCall(
+              'play (recomeçar)',
+              NativeAudio.play({ assetId: track.id, time: 0.2 }),
+            ).catch(() => {})
+          } else {
+            await logNativeCall('resume', NativeAudio.resume({ assetId: track.id })).catch(() =>
+              NativeAudio.play({ assetId: track.id, time: 0.2 }).catch(() => {}),
+            )
           }
-          if (!selected) {
-            // A fila nativa não tem esta faixa: manda reconstruir a partir dela.
-            nativeQueuedRef.current = new Set()
-            nativeQueueActiveRef.current = false
-            queueGenerationRef.current += 1
-            setQueueNonce((value) => value + 1)
-            return
-          }
-          nativeLoadedRef.current = track.id
-        }
-
-        // Numa troca de faixa arranca-se com um tempo > 0: o player desta faixa pode
-        // já ter chegado ao fim noutra volta e, a 0, o plugin não o reposiciona — o
-        // `resume`/`play` era ignorado e a música ficava parada.
-        if (switched) {
-          await logNativeCall(
-            'play (troca)',
-            NativeAudio.play({ assetId: track.id, time: 0.2 }),
-          ).catch(() =>
-            logNativeCall('resume (troca)', NativeAudio.resume({ assetId: track.id })).catch(() => {}),
-          )
-        } else {
-          await logNativeCall('resume', NativeAudio.resume({ assetId: track.id })).catch(() =>
-            logNativeCall('play 0.2', NativeAudio.play({ assetId: track.id, time: 0.2 })).catch(() => {}),
-          )
-        }
-        logNative('info', `arranque enviado · ${track.title}`)
-        if (cancelled) {
-          // Já foi escolhida outra faixa: esta não pode ficar a soar por cima.
-          nativeStaleRef.current.add(track.id)
-          void NativeAudio.pause({ assetId: track.id }).catch(() => {})
+          logNative('info', `já carregada · ${track.title}`)
           return
         }
-        // A faixa nova já está a tocar: agora é seguro libertar os players antigos.
-        // O plugin parou a anterior, mas voltou a prepará-la pronta a tocar, e ela
-        // arrancava por cima da nova (duas músicas ao mesmo tempo).
-        releaseNativeOthers(track.id, confirmedCurrent)
+
+        // Um só player: o anterior é calado e libertado antes de a nova carregar.
+        await dropNativeAsset(nativeLoadedRef.current)
+        if (cancelled) return
+
+        let src = await srcFor(track)
+        // A extração do YouTube pode falhar à primeira (rede fria, resposta instável).
+        if (!src && track.provider === 'youtube') {
+          await new Promise((resolve) => window.setTimeout(resolve, 900))
+          if (cancelled) return
+          if (track.videoId) forgetYouTubeAudioFailure(track.videoId)
+          src = await srcFor(track)
+        }
+        if (cancelled) return
+
+        if (!src) {
+          failedTracksRef.current.add(track.id)
+          const { order: list, pos: index } = stateRef.current
+          const remaining = list.slice(index + 1).find((id) => !failedTracksRef.current.has(id))
+          if (remaining) {
+            setPlayerNotice({
+              message: `Não consegui tocar “${track.title}”. A passar à seguinte…`,
+            })
+            setIntent(true)
+            setPos(list.indexOf(remaining))
+          } else {
+            setPlayerNotice({ message: 'Não consegui tocar estas músicas. Tente outra pesquisa.' })
+            setIntent(false)
+          }
+          return
+        }
+        failedTracksRef.current.delete(track.id)
+
+        await logNativeCall('preload', NativeAudio.preload(nativeItem(track, src))).catch(() => {})
+        if (cancelled) return
+        nativeLoadedRef.current = track.id
+        // O volume do utilizador não viaja com a faixa: aplica-se ao player novo.
+        await NativeAudio.setVolume({
+          assetId: track.id,
+          volume: mutedRef.current ? 0.001 : Math.max(0.01, volumeRef.current),
+        }).catch(() => {})
+        // Tempo > 0: a 0 o plugin não reposiciona o player e, no fim, ignora o play.
+        await logNativeCall('play', NativeAudio.play({ assetId: track.id, time: 0.2 })).catch(
+          () => {},
+        )
+        setCurrentTime(0)
+        logNative('info', `arranque enviado · ${track.title}`)
+        // Guarda o player para o voltar a encontrar ao reabrir a app.
+        const { order: currentOrder, pos: currentPos } = stateRef.current
+        store(KEYS.player, {
+          order: currentOrder,
+          pos: currentPos,
+          playing: intentRef.current.play,
+          assetId: track.id,
+        })
       }
 
       // Se uma chamada nativa ficar pendurada, a troca seguinte não pode ficar presa
@@ -917,171 +786,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     ytAudioSrc,
     nativePlatform,
     nativeReady,
-    silenceNativeOthers,
-    stopNativeOthers,
-    releaseNativeOthers,
-  ])
-
-  /**
-   * Entrega a lista ao motor nativo. É isto que faz a música mudar sozinha e voltar a
-   * arrancar com o telemóvel bloqueado: a passagem de faixa é feita pelo ExoPlayer, sem
-   * depender do JavaScript da app acordado.
-   */
-  useEffect(() => {
-    if (!nativePlatform || !nativeReady || usesIframe || !current) return
-
-    const headQueued = nativeQueuedRef.current.has(current.id)
-    const ids = order.length ? order : [current.id]
-    const startIndex = Math.max(0, ids.indexOf(current.id))
-    // Cada passagem por aqui invalida as entregas antigas: sem isto, faixas saltadas
-    // em paralelo conseguiam arrancar várias ao mesmo tempo.
-    const generation = ++queueGenerationRef.current
-
-    const srcFor = async (track: Track): Promise<string | null> => {
-      if (track.videoId) {
-        const direct = ytAudioRef.current[track.id]
-        if (direct) return direct
-        return resolveYouTubeAudio(track.videoId)
-      }
-      return track.src || null
-    }
-
-    void (async () => {
-      if (!headQueued) {
-        let headSrc = await srcFor(current)
-        // A extração do YouTube pode falhar à primeira (rede fria, resposta instável).
-        // No telemóvel vale insistir: ali não há iframe de reserva.
-        if (!headSrc && nativePlatform && current.provider === 'youtube') {
-          await new Promise((resolve) => window.setTimeout(resolve, 900))
-          if (queueGenerationRef.current !== generation) return
-          if (current.videoId) forgetYouTubeAudioFailure(current.videoId)
-          headSrc = await srcFor(current)
-        }
-        if (queueGenerationRef.current !== generation) return
-        if (!headSrc) {
-          failedTracksRef.current.add(current.id)
-
-          // Faixa do YouTube sem áudio extraível: no browser ainda toca no player do
-          // YouTube. No telemóvel esse player fica mudo dentro da app, por isso a
-          // faixa entra no caminho normal de "não deu, passa à seguinte".
-          if (current.provider === 'youtube' && !nativePlatform) {
-            nativeQueueActiveRef.current = false
-            nativeQueuedRef.current = new Set()
-            nativeLoadedRef.current = null
-            silenceNativeOthers(null)
-            setYtAudioFailed((prev) =>
-              prev[current.id] ? prev : { ...prev, [current.id]: true },
-            )
-            return
-          }
-
-          // Uma música que não dá áudio não pode parar tudo: passa à seguinte.
-          const remaining = ids
-            .slice(startIndex + 1)
-            .find((id) => !failedTracksRef.current.has(id))
-
-          if (remaining) {
-            setPlayerNotice({
-              message: `Não consegui tocar “${current.title}”. A passar à seguinte…`,
-            })
-            // A faixa anterior não pode ficar a tocar por baixo da seguinte.
-            silenceNativeOthers(null)
-            setIntent(true)
-            setPos(ids.indexOf(remaining))
-          } else {
-            setPlayerNotice({ message: 'Não consegui tocar estas músicas. Tente outra pesquisa.' })
-            setIntent(false)
-          }
-          return
-        }
-
-        failedTracksRef.current.delete(current.id)
-
-        await logNativeCall('clearQueue', NativeAudio.clearQueue()).catch(() => {})
-        // Outra troca de faixa já começou: esta entrega é antiga e não pode arrancar
-        // som nenhum (duas músicas a tocar ao mesmo tempo).
-        if (queueGenerationRef.current !== generation) return
-
-        // A fila antiga foi limpa: nada do que estava carregado interessa daqui para a frente.
-        nativeKnownRef.current = new Set()
-        nativeQueuedRef.current = new Set([current.id])
-        nativeQueueActiveRef.current = true
-        nativeLoadedRef.current = current.id
-        nativePlayingRef.current.add(current.id)
-        nativeKnownRef.current.add(current.id)
-
-        // Um só som: as faixas que ficaram da lista anterior são caladas agora.
-        silenceNativeOthers(current.id)
-
-        const queuedState = await logNativeCall(
-          'setQueue',
-          NativeAudio.setQueue({
-            items: [nativeItem(current, headSrc)],
-            startIndex: 0,
-            autoPlay: isPlayingRef.current,
-          }),
-        ).catch(() => null)
-        const queued = Boolean(queuedState)
-        logNative(
-          'info',
-          `fila ${queued ? 'pronta' : 'falhou'} · ${current.title} · autoPlay=${
-            isPlayingRef.current
-          } · atual ${queuedState?.assetId ?? '—'}`,
-        )
-
-        // Motor sem fila (versão antiga do plugin): toca a faixa no modo simples,
-        // para a música sair de qualquer maneira.
-        if (!queued) {
-          nativeQueueActiveRef.current = false
-          // Motor sem fila: um só player, e só o desta faixa.
-          await stopNativeOthers(current.id)
-          await NativeAudio.preload(nativeItem(current, headSrc)).catch(() => {})
-          if (intentRef.current.play) {
-            await NativeAudio.play({ assetId: current.id }).catch(() => {})
-          }
-        }
-
-        // Se carregou em pausa enquanto a faixa carregava, o setQueue pode já ter
-        // arrancado: volta a calar. Sem isto a música "não parava".
-        if (!intentRef.current.play) {
-          await NativeAudio.pause({ assetId: current.id }).catch(() => {})
-        } else if (queueGenerationRef.current === generation) {
-          // Faixa nova a tocar: os players antigos são libertados aqui (o plugin só
-          // pára o que considera atual e volta a preparar o resto, que arrancava
-          // sozinho por cima da nova).
-          releaseNativeOthers(current.id, queuedState?.assetId)
-        }
-      }
-
-      // Abastece as 14 seguintes (repetido a cada troca de faixa para a fila nunca
-      // chegar ao fim). Só um abastecimento novo interrompe este.
-      for (const id of ids.slice(startIndex + 1, startIndex + 15)) {
-        if (queueGenerationRef.current !== generation) return
-        const track = getTrack(id)
-        if (!track || nativeQueuedRef.current.has(id)) continue
-        const src = await srcFor(track)
-        if (queueGenerationRef.current !== generation) return
-        if (!src) continue
-        const added = await NativeAudio.queueAdd({ items: [nativeItem(track, src)] })
-          .then(() => true)
-          .catch(() => false)
-        if (added) {
-          nativeQueuedRef.current.add(id)
-          nativeKnownRef.current.add(id)
-        }
-      }
-    })()
-  }, [
-    current,
-    order,
-    nativePlatform,
-    nativeReady,
-    usesIframe,
+    dropNativeAsset,
     queueNonce,
-    silenceNativeOthers,
-    stopNativeOthers,
-    releaseNativeOthers,
   ])
+
 
   // Trocar de faixa no nativo: o tempo e a duração da anterior não podem ficar na
   // barra (um arrasto com a duração errada saltava para outra música).
@@ -1092,57 +800,37 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     setDuration(currentRef.current?.duration ?? 0)
   }, [currentId, nativePlatform])
 
-  // Uma só música de cada vez: quando a faixa muda, o que ficou para trás é calado já.
+  // Trocar de faixa: o player anterior sai já (calado e libertado), sem esperar pela
+  // resolução do áudio da nova. Um só player, sempre.
   useEffect(() => {
     if (!nativePlatform || !currentId) return
-    silenceNativeOthers(currentId)
-  }, [currentId, nativePlatform, silenceNativeOthers])
+    const loaded = nativeLoadedRef.current
+    if (loaded && loaded !== currentId) void dropNativeAsset(loaded)
+  }, [currentId, nativePlatform, dropNativeAsset])
 
-  // Vigilante: enquanto toca, nada além da faixa atual pode soar. Apanha os players
-  // que a fila do motor arrancou por trás (era isto que deixava duas músicas juntas).
-  // Aqui só se cala (pause): libertar um player a meio de uma troca deixaria a faixa
-  // que o motor considera atual sem player nenhum. A libertação é feita com calma
-  // logo a seguir a cada arranque.
+  // Enquanto toca: amostra periódica do player único (diagnóstico no telemóvel).
   useEffect(() => {
     if (!nativePlatform || !isPlaying || usesIframe) return
     let ticks = 0
     const timer = window.setInterval(() => {
-      const { order: list, pos: index } = stateRef.current
-      const active = index >= 0 ? list[index] : null
-      // Amostra do motor a cada ~4 s: diz se a faixa do ecrã está mesmo a andar.
       ticks += 1
-      if (active && ticks % 3 === 0) {
-        void NativeAudio.getPlaybackState({ assetId: active })
-          .then((snapshot) =>
-            logNative(
-              'info',
-              `amostra · ${secsText(snapshot.currentTime)}/${secsText(snapshot.duration)} · ${
-                snapshot.isPlaying ? 'a tocar' : 'parado'
-              }`,
-            ),
-          )
-          .catch((error: unknown) =>
-            logNative(
-              'error',
-              `amostra → ${error instanceof Error ? error.message : String(error)}`,
-            ),
-          )
-      }
-      nativePlayingRef.current.forEach((assetId) => {
-        if (assetId === active) return
-        nativePlayingRef.current.delete(assetId)
-        void NativeAudio.pause({ assetId }).catch(() => {})
-      })
+      const assetId = nativeLoadedRef.current
+      if (!assetId || ticks % 3 !== 0) return
+      void NativeAudio.getPlaybackState({ assetId })
+        .then((snapshot) =>
+          logNative(
+            'info',
+            `amostra · ${secsText(snapshot.currentTime)}/${secsText(snapshot.duration)} · ${
+              snapshot.isPlaying ? 'a tocar' : 'parado'
+            }`,
+          ),
+        )
+        .catch((error: unknown) =>
+          logNative('error', `amostra → ${error instanceof Error ? error.message : String(error)}`),
+        )
     }, 1500)
     return () => window.clearInterval(timer)
   }, [nativePlatform, isPlaying, usesIframe])
-
-  // Repetir também é do motor nativo (uma faixa, a lista toda, ou nada).
-  useEffect(() => {
-    if (!nativePlatform) return
-    const mode = repeat === 'one' ? 'one' : repeat === 'all' ? 'all' : 'none'
-    void NativeAudio.setRepeatMode({ mode }).catch(() => {})
-  }, [repeat, nativePlatform])
 
   // Se a faixa deixou de tocar no iframe (áudio resolvido ou outra faixa), o vídeo tem de calar.
   useEffect(() => {
@@ -1569,8 +1257,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const isLiked = useCallback((id: string) => liked.includes(id), [liked])
 
   // O motor pode aceitar a faixa e ficar mudo a 0:00 (URL sem som, extração falhada):
-  // a barra ficava parada e a música nunca passava à seguinte. Aqui a app tenta
-  // recomeçar a faixa e, se continuar em silêncio, salta à frente.
+  // a barra ficava parada e a música nunca passava à seguinte. Aqui a app dá um
+  // empurrão ao player único e, se continuar em silêncio, salta à frente.
   useEffect(() => {
     if (!nativePlatform || !nativeReady || usesIframe || !current || !isPlaying) return
     const trackId = current.id
@@ -1579,7 +1267,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
     const stalled = async () => {
       if (cancelled || !intentRef.current.play) return false
-      const state = await NativeAudio.getPlaybackState().catch(() => null)
+      const assetId = nativeLoadedRef.current
+      if (!assetId) return false
+      const state = await NativeAudio.getPlaybackState({ assetId }).catch(() => null)
       if (cancelled || !state) return false
       // Só é "mudo" se não está a tocar nem avançou: em pausa a posição é > 0.
       return !state.isPlaying && (state.currentTime ?? 0) < 0.3
@@ -1587,10 +1277,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
     const heal = async () => {
       if (!(await stalled())) return
-      const state = await NativeAudio.getPlaybackState().catch(() => null)
-      const assetId = state?.assetId ?? nativeLoadedRef.current
+      const assetId = nativeLoadedRef.current
       if (cancelled || !assetId) return
-      await NativeAudio.play({ assetId, time: 0 }).catch(() => {})
+      logNative('info', `silêncio a 0:00 · a recomeçar ${assetId}`)
+      await logNativeCall('play (recuperar)', NativeAudio.play({ assetId, time: 0.2 })).catch(
+        () => {},
+      )
       timers.push(
         window.setTimeout(() => {
           void (async () => {
@@ -1599,9 +1291,6 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
             setPlayerNotice({
               message: `Não consegui tocar “${current.title}”. A passar à seguinte…`,
             })
-            nativeQueueActiveRef.current = false
-            nativeQueuedRef.current = new Set()
-            queueGenerationRef.current += 1
             endedRef.current()
           })()
         }, 5000),
@@ -1617,14 +1306,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   const handleEnded = useCallback(() => {
     const { repeat: mode } = stateRef.current
-    if (nativeQueueActiveRef.current) return
     if (mode === 'one') {
       if (!usesIframeRef.current && Capacitor.isNativePlatform()) {
         const assetId = nativeLoadedRef.current
         if (assetId) {
-          silenceNativeOthers(assetId)
           setCurrentTime(0)
-          void NativeAudio.play({ assetId, time: 0 }).catch(() => {})
+          // Tempo > 0: a 0 o plugin não reposiciona e o player no fim ignora o play.
+          void NativeAudio.play({ assetId, time: 0.2 }).catch(() => {})
         }
         return
       }
@@ -1644,8 +1332,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       }
       return
     }
+    // Sem fila do plugin: a app escolhe a próxima e o efeito de carga troca o player.
     step(1, true)
-  }, [step, silenceNativeOthers])
+  }, [step])
 
   useEffect(() => {
     endedRef.current = handleEnded
