@@ -292,16 +292,37 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       if (!nativePlatform) return
       const ids = new Set(nativePlayingRef.current)
       nativeStaleRef.current.forEach((id) => ids.add(id))
-      nativeStaleRef.current.clear()
       if (nativeLoadedRef.current) ids.add(nativeLoadedRef.current)
+      ids.delete(keep ?? '')
+      // A faixa atual nunca pode ser calada nem libertada por aqui.
+      nativeStaleRef.current.delete(keep ?? '')
+      if (!ids.size) return
+
+      // Calar é imediato e não depende de nada: é isto que acaba com as duas
+      // músicas a tocar ao mesmo tempo.
       ids.forEach((assetId) => {
-        if (assetId === keep) return
         nativePlayingRef.current.delete(assetId)
-        nativeKnownRef.current.delete(assetId)
         if (nativeLoadedRef.current === assetId) nativeLoadedRef.current = keep
         void NativeAudio.pause({ assetId }).catch(() => {})
-        void NativeAudio.unload({ assetId }).catch(() => {})
       })
+
+      // Só se liberta (unload) o que o motor confirma que já não é a faixa atual: um
+      // player libertado que o plugin continue a considerar `currentlyPlayingAssetId`
+      // faz todas as trocas seguintes falharem e a música deixa de tocar. Sem
+      // confirmação fica só a pausa — silêncio garantido, player libertado na
+      // próxima troca em que for seguro.
+      void (async () => {
+        const state = await NativeAudio.getQueueState().catch(() => null)
+        const current = state?.assetId ?? null
+        // Sem faixa atual confirmada (fila vazia) não se liberta nada.
+        if (!current) return
+        ids.forEach((assetId) => {
+          if (assetId === current) return
+          nativeStaleRef.current.delete(assetId)
+          nativeKnownRef.current.delete(assetId)
+          void NativeAudio.unload({ assetId }).catch(() => {})
+        })
+      })()
     },
     [nativePlatform],
   )
