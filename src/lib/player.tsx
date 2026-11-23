@@ -249,6 +249,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const endedRef = useRef<() => void>(() => {})
   /** O que o utilizador pediu (tocar/parar). Os eventos do motor não contrariam isto. */
   const intentRef = useRef({ play: false, at: 0 })
+  /** Última prova de vida do player nativo (posição a avançar). */
+  const lastTickRef = useRef(0)
+  /** Último instante em que a barra de progresso foi atualizada. */
+  const lastTimeUiRef = useRef(0)
 
   const setIntent = useCallback((play: boolean) => {
     intentRef.current = { play, at: Date.now() }
@@ -454,7 +458,17 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
     void (async () => {
       const timeListener = await NativeAudio.addListener('currentTime', (event) => {
-        if (!disposed) setCurrentTime(event.currentTime)
+        if (disposed) return
+        // Prova de vida: a posição avançou, o player está mesmo a tocar.
+        if (typeof event.currentTime === 'number' && event.currentTime > 0.5) {
+          lastTickRef.current = Date.now()
+        }
+        // O plugin emite de 100 em 100 ms e cada emissão re-renderiza a app toda,
+        // o que engasga o WebView. A 4 Hz a barra anda igual e a interface respira.
+        const now = Date.now()
+        if (now - lastTimeUiRef.current < 250) return
+        lastTimeUiRef.current = now
+        setCurrentTime(event.currentTime)
       })
       const completeListener = await NativeAudio.addListener('complete', (event) => {
         if (disposed) return
@@ -511,6 +525,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
             event.assetId ?? '—'
           } · ${secsText(event.currentTime)}/${secsText(event.duration)}`,
         )
+        if (event.isPlaying) lastTickRef.current = Date.now()
         if (typeof event.currentTime === 'number') setCurrentTime(event.currentTime)
         if (typeof event.duration === 'number' && event.duration > 0) {
           nativeDurationRef.current = event.duration
@@ -1256,30 +1271,34 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   const isLiked = useCallback((id: string) => liked.includes(id), [liked])
 
-  // O motor pode aceitar a faixa e ficar mudo a 0:00 (URL sem som, extração falhada):
-  // a barra ficava parada e a música nunca passava à seguinte. Aqui a app dá um
-  // empurrão ao player único e, se continuar em silêncio, salta à frente.
+  // O motor pode ficar mudo (URL sem som, extração falhada). Antes de mexer, exige-se
+  // prova de que está mesmo parado: um arranque lento do YouTube leva segundos a
+  // encher o buffer e não pode ser confundido com silêncio (era isso que fazia a
+  // música parar sozinha e saltar de faixa).
   useEffect(() => {
     if (!nativePlatform || !nativeReady || usesIframe || !current || !isPlaying) return
     const trackId = current.id
     let cancelled = false
     const timers: number[] = []
+    const startedAt = Date.now()
 
     const stalled = async () => {
       if (cancelled || !intentRef.current.play) return false
       const assetId = nativeLoadedRef.current
       if (!assetId) return false
+      // Deu sinal de vida desde que este player arrancou: está a tocar.
+      if (lastTickRef.current > startedAt) return false
       const state = await NativeAudio.getPlaybackState({ assetId }).catch(() => null)
       if (cancelled || !state) return false
-      // Só é "mudo" se não está a tocar nem avançou: em pausa a posição é > 0.
-      return !state.isPlaying && (state.currentTime ?? 0) < 0.3
+      if (state.isPlaying || (state.currentTime ?? 0) > 0.5) return false
+      return true
     }
 
     const heal = async () => {
       if (!(await stalled())) return
       const assetId = nativeLoadedRef.current
       if (cancelled || !assetId) return
-      logNative('info', `silêncio a 0:00 · a recomeçar ${assetId}`)
+      logNative('info', `sem sinal de vida · a recomeçar ${assetId}`)
       await logNativeCall('play (recuperar)', NativeAudio.play({ assetId, time: 0.2 })).catch(
         () => {},
       )
@@ -1293,11 +1312,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
             })
             endedRef.current()
           })()
-        }, 5000),
+        }, 9000),
       )
     }
 
-    timers.push(window.setTimeout(() => void heal(), 3500))
+    // 8 s é mais do que qualquer buffering normal (o YouTube incluído).
+    timers.push(window.setTimeout(() => void heal(), 8000))
     return () => {
       cancelled = true
       timers.forEach((id) => window.clearTimeout(id))
