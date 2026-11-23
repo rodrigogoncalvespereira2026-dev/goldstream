@@ -364,12 +364,14 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
             const total = nativeDurationRef.current
             // Player já no fim: `resume` não faz nada. Recomeçar do zero é o que o
             // utilizador espera ao carregar em play depois de a faixa acabar.
+            // Sempre com um tempo > 0: a 0 o plugin não reposiciona o player e, se
+            // ele estiver no fim, o `play` é ignorado (a música ficava parada).
             if (total > 0 && currentTimeRef.current >= total - 1) {
               setCurrentTime(0)
-              void NativeAudio.play({ assetId, time: 0 }).catch(() => {})
+              void NativeAudio.play({ assetId, time: 0.2 }).catch(() => {})
             } else {
               void NativeAudio.resume({ assetId }).catch(() =>
-                NativeAudio.play({ assetId, time: 0 }).catch(() => {}),
+                NativeAudio.play({ assetId, time: 0.2 }).catch(() => {}),
               )
             }
           }
@@ -541,7 +543,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         // Repetir a mesma faixa: voltar a tocar do início (sem mais nada a tocar).
         if (assetId && stateRef.current.repeat === 'one') {
           silenceNativeOthers(assetId)
-          void NativeAudio.play({ assetId, time: 0 }).catch(() => {})
+          // Tempo > 0 para o player recomeçar mesmo (a 0 o plugin não reposiciona).
+          void NativeAudio.play({ assetId, time: 0.2 }).catch(() => {})
           setCurrentTime(0)
           return
         }
@@ -551,7 +554,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         if (assetId && Date.now() - seekedAtRef.current < 1500) {
           seekedAtRef.current = 0
           silenceNativeOthers(assetId)
-          void NativeAudio.play({ assetId, time: 0 }).catch(() => {})
+          void NativeAudio.play({ assetId, time: 0.2 }).catch(() => {})
           setCurrentTime(0)
           return
         }
@@ -770,7 +773,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
         // É outra faixa da fila: o ExoPlayer tem de mudar para ela (senão ficava a
         // tocar a anterior com a app a mostrar a nova).
-        if (nativeLoadedRef.current !== track.id) {
+        const switched = nativeLoadedRef.current !== track.id
+        if (switched) {
           const selected = await NativeAudio.queueSelect({ assetId: track.id })
             .then(() => true)
             .catch(() => false)
@@ -791,9 +795,18 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           nativeLoadedRef.current = track.id
         }
 
-        await NativeAudio.resume({ assetId: track.id }).catch(() =>
-          NativeAudio.play({ assetId: track.id }).catch(() => {}),
-        )
+        // Numa troca de faixa arranca-se com um tempo > 0: o player desta faixa pode
+        // já ter chegado ao fim noutra volta e, a 0, o plugin não o reposiciona — o
+        // `resume`/`play` era ignorado e a música ficava parada.
+        if (switched) {
+          await NativeAudio.play({ assetId: track.id, time: 0.2 }).catch(() =>
+            NativeAudio.resume({ assetId: track.id }).catch(() => {}),
+          )
+        } else {
+          await NativeAudio.resume({ assetId: track.id }).catch(() =>
+            NativeAudio.play({ assetId: track.id, time: 0.2 }).catch(() => {}),
+          )
+        }
         if (cancelled) {
           // Já foi escolhida outra faixa: esta não pode ficar a soar por cima.
           nativeStaleRef.current.add(track.id)
