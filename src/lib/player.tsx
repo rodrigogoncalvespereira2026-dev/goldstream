@@ -161,6 +161,19 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const seekedAtRef = useRef(0)
   /** Faixa que a própria fila nativa começou (não precisa de ser tocada outra vez). */
   const nativeAdvancedRef = useRef<string | null>(null)
+  /**
+   * Todos os assets que o motor nativo já teve. Serve para calar o que ficou a tocar
+   * noutro player depois de a app reabrir: sem isto, a faixa antiga continuava e a nova
+   * arrancava por cima (duas músicas ao mesmo tempo).
+   */
+  const nativeKnownRef = useRef<Set<string>>(new Set())
+  /** Faixa adotada do motor ao reabrir a app: já toca, não pode ser mandada arrancar outra vez. */
+  const adoptedRef = useRef<string | null>(null)
+  /**
+   * Falso até a fila do motor nativo ser adotada ao abrir a app. Enquanto for falso,
+   * nenhum efeito pode mandar no motor — era isso que apagava a música que já tocava.
+   */
+  const [nativeReady, setNativeReady] = useState(!nativePlatform)
   const addRecentRef = useRef<(id: string) => void>(() => {})
 
   const [stageEl, setStageEl] = useState<HTMLElement | null>(null)
@@ -239,6 +252,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const nativeAssetIds = useCallback((): string[] => {
     const ids = new Set(nativePlayingRef.current)
     nativeQueuedRef.current.forEach((id) => ids.add(id))
+    nativeKnownRef.current.forEach((id) => ids.add(id))
     if (nativeLoadedRef.current) ids.add(nativeLoadedRef.current)
     return Array.from(ids)
   }, [])
@@ -472,6 +486,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         nativeLoadedRef.current = assetId
         nativeAdvancedRef.current = assetId
         nativePlayingRef.current.add(assetId)
+        nativeKnownRef.current.add(assetId)
         setPos(nextIndex)
         setCurrentTime(0)
         addRecentRef.current(assetId)
@@ -527,20 +542,52 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     if (!nativePlatform) return
     try {
       const state = await NativeAudio.getQueueState()
+      const ids = state?.assetIds ?? []
+      // A fila do motor é a única fonte de verdade: guardamos tudo o que ele tem para
+      // conseguir calar as faixas antigas quando o utilizador escolher outra.
+      ids.forEach((id) => {
+        nativeQueuedRef.current.add(id)
+        nativeKnownRef.current.add(id)
+      })
       const assetId = state?.assetId
       if (!assetId || !getTrack(assetId)) return
-      const ids = state.assetIds ?? []
       nativeLoadedRef.current = assetId
       nativePlayingRef.current.add(assetId)
+      nativeKnownRef.current.add(assetId)
       nativeQueueActiveRef.current = true
-      ids.forEach((id) => nativeQueuedRef.current.add(id))
-      const base = stateRef.current.order.length ? stateRef.current.order : ids
-      const index = base.indexOf(assetId)
-      setOrder(index >= 0 ? base : [assetId, ...base])
-      setPos(index >= 0 ? index : 0)
-      setIntent(restoredPlayingRef.current)
+      adoptedRef.current = assetId
+      const stored = stateRef.current.order
+      const storedIndex = stored.indexOf(assetId)
+      const nativeIndex = ids.indexOf(assetId)
+      // Se a faixa em curso não está na ordem guardada, a ordem certa é a do motor —
+      // não uma lista nova que escondia o que estava a tocar.
+      setOrder(storedIndex >= 0 ? stored : ids.length ? ids : [assetId, ...stored])
+      setPos(storedIndex >= 0 ? storedIndex : Math.max(0, nativeIndex))
+      // O estado real do motor é que decide o botão tocar/pausa. O valor guardado no
+      // telefone podia estar desatualizado (ex.: mudou de faixa com a app fechada).
+      const snapshot = await NativeAudio.getPlaybackState({ assetId }).catch(() => null)
+      const playing = snapshot
+        ? snapshot.isPlaying
+        : await NativeAudio.isPlaying({ assetId })
+            .then((result) => result.isPlaying)
+            .catch(() => restoredPlayingRef.current)
+      if (playing) nativePlayingRef.current.add(assetId)
+      // A barra de progresso voltava a 0:00 ao reabrir; agora recupera o tempo real.
+      if (snapshot) {
+        if (typeof snapshot.currentTime === 'number' && snapshot.currentTime > 0) {
+          setCurrentTime(snapshot.currentTime)
+        }
+        if (typeof snapshot.duration === 'number' && snapshot.duration > 0) {
+          nativeDurationRef.current = snapshot.duration
+          setDuration(snapshot.duration)
+        }
+      }
+      setIntent(playing)
     } catch {
       /* sem fila ativa */
+    } finally {
+      // A partir daqui os efeitos já podem mandar no motor.
+      setNativeReady(true)
     }
   }, [nativePlatform, setIntent])
 
@@ -557,6 +604,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // Load the selected track and honour the play/pause intent.
   useEffect(() => {
     if (nativePlatform) {
+      // Antes de adotar a fila nativa, mexer no motor calava a música que já estava a
+      // tocar (ou deixava a antiga por baixo). Esperar pelo syncFromNative.
+      if (!nativeReady) return
       const track = current
       let cancelled = false
 
@@ -585,6 +635,15 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         // ainda não tenha chegado a esta faixa.
         if (!isPlaying) {
           silenceNativeOthers(null)
+          return
+        }
+
+        // Faixa adotada do motor ao reabrir a app: já está a tocar. Mandá-la arrancar
+        // outra vez recomeçava do início e podia soar em duplicado.
+        if (adoptedRef.current === track.id) {
+          adoptedRef.current = null
+          nativeLoadedRef.current = track.id
+          silenceNativeOthers(track.id)
           return
         }
 
@@ -646,7 +705,16 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     } else {
       audio.pause()
     }
-  }, [current, isPlaying, durations, usesIframe, ytAudioSrc, nativePlatform, silenceNativeOthers])
+  }, [
+    current,
+    isPlaying,
+    durations,
+    usesIframe,
+    ytAudioSrc,
+    nativePlatform,
+    nativeReady,
+    silenceNativeOthers,
+  ])
 
   /**
    * Entrega a lista ao motor nativo. É isto que faz a música mudar sozinha e voltar a
@@ -654,7 +722,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
    * depender do JavaScript da app acordado.
    */
   useEffect(() => {
-    if (!nativePlatform || usesIframe || !current) return
+    if (!nativePlatform || !nativeReady || usesIframe || !current) return
 
     const headQueued = nativeQueuedRef.current.has(current.id)
     const ids = order.length ? order : [current.id]
@@ -716,10 +784,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
         await NativeAudio.clearQueue().catch(() => {})
 
+        // A fila antiga foi limpa: nada do que estava carregado interessa daqui para a frente.
+        nativeKnownRef.current = new Set()
         nativeQueuedRef.current = new Set([current.id])
         nativeQueueActiveRef.current = true
         nativeLoadedRef.current = current.id
         nativePlayingRef.current.add(current.id)
+        nativeKnownRef.current.add(current.id)
 
         // Um só som: as faixas que ficaram da lista anterior são caladas agora.
         silenceNativeOthers(current.id)
@@ -761,10 +832,21 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         const added = await NativeAudio.queueAdd({ items: [nativeItem(track, src)] })
           .then(() => true)
           .catch(() => false)
-        if (added) nativeQueuedRef.current.add(id)
+        if (added) {
+          nativeQueuedRef.current.add(id)
+          nativeKnownRef.current.add(id)
+        }
       }
     })()
-  }, [current, order, nativePlatform, usesIframe, queueNonce, silenceNativeOthers])
+  }, [
+    current,
+    order,
+    nativePlatform,
+    nativeReady,
+    usesIframe,
+    queueNonce,
+    silenceNativeOthers,
+  ])
 
   // Trocar de faixa no nativo: o tempo e a duração da anterior não podem ficar na
   // barra (um arrasto com a duração errada saltava para outra música).
