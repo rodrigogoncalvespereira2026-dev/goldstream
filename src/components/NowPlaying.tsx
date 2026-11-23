@@ -13,7 +13,6 @@ import { QueueSheet } from './QueueSheet'
 import {
   ChevronDownIcon,
   HeartIcon,
-  LyricsIcon,
   NextIcon,
   PauseIcon,
   PlusIcon,
@@ -290,14 +289,6 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
             </div>
 
             <div className="np-extras">
-              <button
-                type="button"
-                className="np-extra"
-                onClick={() => setLyricsOpen(true)}
-                aria-label="Ver letra"
-              >
-                <LyricsIcon size={22} />
-              </button>
               <button type="button" className="np-extra" onClick={share} aria-label="Partilhar música">
                 <ShareIcon size={22} />
                 {copied && <span className="np-extra-note">Copiado</span>}
