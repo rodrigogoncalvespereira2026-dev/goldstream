@@ -17,6 +17,9 @@ export function MyPlaylist({ id, navigate }: { id: string; navigate: Navigate })
   const playlist = playlists.find((item) => item.id === id)
   const { playQueue, durations, current, toggle } = usePlayer()
   const [name, setName] = useState(playlist?.name ?? '')
+  // A confirmação é feita aqui dentro: o window.confirm não abre no WebView do
+  // APK (devolve sempre "não") e a playlist nunca chegava a ser apagada.
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   if (!playlist) {
     return (
@@ -85,17 +88,36 @@ export function MyPlaylist({ id, navigate }: { id: string; navigate: Navigate })
               </button>
             </form>
 
-            <button
-              type="button"
-              className="ghost-button"
-              onClick={() => {
-                if (!window.confirm(`Apagar a playlist “${playlist.name}”?`)) return
-                deletePlaylist(playlist.id)
-                navigate({ type: 'library' })
-              }}
-            >
-              Apagar
-            </button>
+            {confirmingDelete ? (
+              <span className="confirm-delete" role="group" aria-label="Confirmar que apaga a playlist">
+                <span className="confirm-delete-text">Apagar “{playlist.name}”?</span>
+                <button
+                  type="button"
+                  className="danger-button"
+                  onClick={() => {
+                    deletePlaylist(playlist.id)
+                    navigate({ type: 'library' })
+                  }}
+                >
+                  Sim, apagar
+                </button>
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={() => setConfirmingDelete(false)}
+                >
+                  Cancelar
+                </button>
+              </span>
+            ) : (
+              <button
+                type="button"
+                className="ghost-button is-danger"
+                onClick={() => setConfirmingDelete(true)}
+              >
+                Apagar
+              </button>
+            )}
           </div>
         </div>
       </header>
