@@ -4273,6 +4273,12 @@ img {
   transition: opacity 0.12s ease, color 0.12s ease, background 0.12s ease;
 }
 
+/* O × de tirar da lista tem de se ver sem passar o rato por cima. */
+.track-remove {
+  opacity: 0.85;
+  color: #d4d4d4;
+}
+
 .track-remove span {
   font-size: 18px;
   line-height: 1;
