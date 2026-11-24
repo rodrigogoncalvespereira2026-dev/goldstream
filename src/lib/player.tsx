@@ -987,9 +987,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
             const track = currentRef.current
             setPlayerNotice(null)
             try {
-              // Só o som interessa: no WebView pedir o vídeo mais pequeno poupa o
-              // descodificador (o YouTube pode ignorar, o tamanho do iframe ajuda).
-              if (isWebView) instance.setPlaybackQuality?.('tiny')
+              // Sem pedir qualidade "tiny": no telemóvel o 144p vem muitas vezes em
+              // AV1 (descodificado por software) e era isso que cortava o som.
               instance.setVolume?.(mutedRef.current ? 0 : Math.round(volumeRef.current * 100))
               if (track?.videoId) {
                 if (startVideo !== track.videoId) {

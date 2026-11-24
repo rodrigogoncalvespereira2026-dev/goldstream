@@ -4974,8 +4974,13 @@ img {
    que o telemóvel descodifica. No mínimo aceite pelo YouTube, fica em 144p/240p
    em vez de 480p/720p, e só o som é que interessa. */
 .is-webview .yt-sink {
-  width: 200px;
-  height: 200px;
+  /* Mesmo tamanho do "Ver vídeo" (que toca liso): num iframe pequeno o YouTube
+     escolhe 144p, que costuma vir em AV1 — descodificado por software na
+     maioria dos telemóveis, pesado ao ponto de cortar o som. Em tamanho normal
+     vem H.264/VP9, descodificado pelo hardware. */
+  width: 100vw;
+  height: auto;
+  aspect-ratio: 16 / 9;
   /* Tem de ficar DENTRO do ecrã: um iframe de outro site fora do ecrã é
      estrangulado pelo WebView (sem frames nem temporizadores). E tem de ser
      OPACO: um vídeo com opacity < 1 sai do caminho rápido de composição do
