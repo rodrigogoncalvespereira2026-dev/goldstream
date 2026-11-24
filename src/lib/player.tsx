@@ -91,6 +91,7 @@ const KEYS = {
   recent: 'sonora:recent',
   tracks: 'sonora:tracks',
   player: 'sonora:player',
+  durations: 'sonora:durations',
 }
 
 /** Última fila/faixa mostrada, para voltar a aparecer ao reabrir a app. */
@@ -209,7 +210,14 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
-  const [durations, setDurations] = useState<Record<string, number>>({})
+  const [durations, setDurations] = useState<Record<string, number>>(() => {
+    const saved = readStored<Record<string, unknown>>(KEYS.durations, {})
+    const clean: Record<string, number> = {}
+    Object.entries(saved).forEach(([id, value]) => {
+      if (typeof value === 'number' && Number.isFinite(value) && value > 0) clean[id] = value
+    })
+    return clean
+  })
   const [volume, setVolume] = useState(() => {
     const stored = readStored<number>(KEYS.volume, 0.8)
     return Number.isFinite(stored) ? Math.min(1, Math.max(0, stored)) : 0.8
@@ -412,7 +420,18 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       setCurrentTime(time)
     }
     const onMeta = () => {
-      if (Number.isFinite(audio.duration) && audio.duration > 0) setDuration(audio.duration)
+      if (Number.isFinite(audio.duration) && audio.duration > 0) {
+        const total = audio.duration
+        setDuration(total)
+        // Guarda o comprimento real da faixa que está a tocar: a lista passa a
+        // mostrar o tempo sem ter de a carregar outra vez.
+        const id = loadedIdRef.current
+        if (id) {
+          setDurations((prev) =>
+            Math.abs((prev[id] ?? 0) - total) < 1 ? prev : { ...prev, [id]: total },
+          )
+        }
+      }
       setPlayerNotice(null)
     }
     const onEnded = () => endedRef.current()
@@ -1132,34 +1151,63 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     store(KEYS.tracks, external)
   }, [liked, recent])
 
-  // Read real track lengths once so the lists show accurate durations.
-  // No telemóvel não: aqui cada sonda é um player a mais no WebView, a puxar metadata
-  // de todas as faixas ao mesmo tempo, a competir com o ExoPlayer e com a rede.
-  // Num WebView (APK feito a partir do site) também não: eram 19 leitores a abrir
-  // ao mesmo tempo que a música, a disputar rede e descodificador.
+  // Tempos já lidos ficam guardados: na abertura seguinte aparecem logo.
   useEffect(() => {
-    if (nativePlatform || isWebView) return
+    store(KEYS.durations, durations)
+  }, [durations])
+
+  // Comprimento real das faixas do catálogo, uma de cada vez.
+  // Antes abriam-se 19 leitores ao mesmo tempo; no WebView isso competia com o
+  // player e a rede, por isso isto estava desligado lá e as durações ficavam
+  // sempre em "–:––". Agora é um leitor só, com pausa entre leituras, e o
+  // telemóvel também recebe os tempos.
+  const durationsRef = useRef(durations)
+  durationsRef.current = durations
+
+  useEffect(() => {
+    if (nativePlatform) return
     let cancelled = false
-    const probes: HTMLAudioElement[] = []
-    TRACKS.forEach((track) => {
-      const probe = new Audio()
-      probe.preload = 'metadata'
-      probe.src = track.src
+    let timer: number | undefined
+    const probe = new Audio()
+    probe.preload = 'metadata'
+    const pending = TRACKS.filter((track) => !((durationsRef.current[track.id] ?? 0) > 0))
+    let index = 0
+
+    const step = () => {
+      if (cancelled) return
+      const track = pending[index]
+      index += 1
+      if (!track) {
+        probe.removeAttribute('src')
+        return
+      }
+      const done = () => {
+        probe.removeEventListener('loadedmetadata', onMeta)
+        probe.removeEventListener('error', done)
+        if (!cancelled) timer = window.setTimeout(step, 800)
+      }
       const onMeta = () => {
-        if (cancelled) return
-        if (Number.isFinite(probe.duration) && probe.duration > 0) {
-          setDurations((prev) => (prev[track.id] ? prev : { ...prev, [track.id]: probe.duration }))
+        const total = probe.duration
+        if (!cancelled && Number.isFinite(total) && total > 0) {
+          setDurations((prev) =>
+            Math.abs((prev[track.id] ?? 0) - total) < 1 ? prev : { ...prev, [track.id]: total },
+          )
         }
+        done()
       }
       probe.addEventListener('loadedmetadata', onMeta)
+      probe.addEventListener('error', done)
+      probe.src = track.src
       probe.load()
-      probes.push(probe)
-    })
+    }
+
+    // Dá tempo ao primeiro desenho e à música que esteja a tocar.
+    timer = window.setTimeout(step, 1500)
+
     return () => {
       cancelled = true
-      probes.forEach((probe) => {
-        probe.removeAttribute('src')
-      })
+      window.clearTimeout(timer)
+      probe.removeAttribute('src')
     }
   }, [nativePlatform])
 
