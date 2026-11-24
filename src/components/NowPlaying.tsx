@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { TouchEvent as ReactTouchEvent } from 'react'
 import { getAlbum, getTrack } from '../lib/catalog'
-import { fetchLyrics, type LyricsResult, parseSyncedLyrics, getActiveLyricIndex, type SyncedLine } from '../lib/lyrics'
+import { fetchLyrics, type LyricsResult, parseSyncedLyrics, type SyncedLine } from '../lib/lyrics'
+import { useLyricClock } from '../lib/useLyricClock'
 import { cx, formatTime } from '../lib/format'
 import { usePlayer, usePlayerTime } from '../lib/player'
 import { CoverImage } from './CoverImage'
@@ -64,7 +65,7 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
   const [lyricsOpen, setLyricsOpen] = useState(false)
   const [lyrics, setLyrics] = useState<LyricsResult | null>(null)
   const [syncedLines, setSyncedLines] = useState<SyncedLine[]>([])
-  const [activeLineIndex, setActiveLineIndex] = useState(-1)
+  const [scrolled, setScrolled] = useState(false)
   const [copied, setCopied] = useState(false)
 
   // A letra é pedida quando a música muda (só com o ecrã aberto, para não gastar dados à toa).
@@ -86,15 +87,12 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
     return () => controller.abort()
   }, [open, current])
 
-  // Atualiza a linha da letra ativa com base no tempo atual da música.
-  useEffect(() => {
-    if (!syncedLines.length || !currentTime) {
-      setActiveLineIndex(-1)
-      return
-    }
-    const idx = getActiveLyricIndex(syncedLines, currentTime)
-    setActiveLineIndex(idx)
-  }, [currentTime, syncedLines])
+  // Linha ativa certa ao décimo de segundo (o mesmo relógio e ajuste da folha da letra).
+  const { index: activeLineIndex } = useLyricClock(syncedLines, current?.id)
+
+  // A prévia acompanha a música: a linha anterior, a ativa e as duas seguintes.
+  // Antes mostrava sempre as 4 primeiras e a linha ativa desaparecia depois delas.
+  const previewStart = Math.max(0, Math.min(activeLineIndex - 1, syncedLines.length - 4))
 
   const share = async () => {
     if (!current) return
@@ -179,6 +177,10 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
       onTouchCancel={resetDrag}
+      onScroll={(event) => {
+        const next = event.currentTarget.scrollTop > 8
+        if (next !== scrolled) setScrolled(next)
+      }}
       style={{
         background: `linear-gradient(180deg, ${tint} 0%, #0a0a0a 62%)`,
         transform: closing ? 'translateY(100%)' : `translateY(${Math.max(0, dragY)}px)`,
@@ -186,12 +188,33 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
       }}
     >
       <div className="np-inner">
-        <div className="np-top">
+        <div className={cx('np-top', scrolled && 'is-scrolled')}>
           <button type="button" className="np-round" onClick={onClose} aria-label="Minimizar player">
             <ChevronDownIcon size={26} />
           </button>
-          <span className="np-kicker">Agora tocando</span>
-          <span className="np-round-spacer" aria-hidden="true" />
+          <div className="np-heading">
+            <span className="np-kicker">
+              {isPlaying && <span className="np-live" aria-hidden="true" />}
+              {isPlaying ? 'A tocar agora' : 'Em pausa'}
+            </span>
+            {current && (
+              <span className="np-context">
+                {current.provider === 'youtube' ? 'YouTube' : current.albumTitle}
+              </span>
+            )}
+          </div>
+          {current ? (
+            <button
+              type="button"
+              className="np-round"
+              onClick={() => setQueueOpen(true)}
+              aria-label="Ver fila"
+            >
+              <QueueIcon size={22} />
+            </button>
+          ) : (
+            <span className="np-round-spacer" aria-hidden="true" />
+          )}
         </div>
 
         {current ? (
@@ -304,8 +327,9 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
                 <div className="np-lyrics-body">
                   {syncedLines.length ? (
                     syncedLines
-                      .slice(0, 4)
-                      .map((line, index) => (
+                      .slice(previewStart, previewStart + 4)
+                      .map((_line, offset) => previewStart + offset)
+                      .map((index) => (
                         <p
                           key={index}
                           className={cx('np-lyrics-line', {
@@ -313,7 +337,7 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
                             'is-passed': index < activeLineIndex,
                           })}
                         >
-                          {line.text}
+                          {syncedLines[index].text}
                         </p>
                       ))
                   ) : (

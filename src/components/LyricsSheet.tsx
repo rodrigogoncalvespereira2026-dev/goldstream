@@ -2,15 +2,13 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { cx } from '../lib/format'
 import type { Track } from '../lib/catalog'
-import { usePlayerTime } from '../lib/player'
-import { fetchLyrics, type LyricsResult, parseSyncedLyrics, getActiveLyricIndex, type SyncedLine } from '../lib/lyrics'
+import { fetchLyrics, type LyricsResult, parseSyncedLyrics, type SyncedLine } from '../lib/lyrics'
+import { offsetText, useLyricClock } from '../lib/useLyricClock'
 
 /** Folha com a letra completa da faixa em curso. */
 export function LyricsSheet({ track, onClose }: { track: Track; onClose: () => void }) {
-  const { currentTime } = usePlayerTime()
   const [lyrics, setLyrics] = useState<LyricsResult | null>(null)
   const [syncedLines, setSyncedLines] = useState<SyncedLine[]>([])
-  const [activeLineIndex, setActiveLineIndex] = useState(-1)
   const [loading, setLoading] = useState(true)
   const bodyRef = useRef<HTMLDivElement | null>(null)
   const activeLineRef = useRef<HTMLParagraphElement | null>(null)
@@ -34,15 +32,11 @@ export function LyricsSheet({ track, onClose }: { track: Track; onClose: () => v
     return () => controller.abort()
   }, [track])
 
-  // Atualiza a linha da letra ativa com base no tempo atual da música.
-  useEffect(() => {
-    if (!syncedLines.length || !currentTime) {
-      setActiveLineIndex(-1)
-      return
-    }
-    const idx = getActiveLyricIndex(syncedLines, currentTime)
-    setActiveLineIndex(idx)
-  }, [currentTime, syncedLines])
+  // Linha ativa certa ao décimo de segundo, com o ajuste guardado para esta faixa.
+  const { index: activeLineIndex, offset, nudge, resetOffset } = useLyricClock(
+    syncedLines,
+    track.id,
+  )
 
   // A letra acompanha a música: a linha ativa fica sempre ao centro da folha.
   useEffect(() => {
@@ -133,7 +127,27 @@ export function LyricsSheet({ track, onClose }: { track: Track; onClose: () => v
           </div>
         )}
 
-        {lyrics && <p className="lyrics-source">Letra disponibilizada por Musixmatch</p>}
+        {syncedLines.length > 0 && (
+          <div className="lyrics-sync" role="group" aria-label="Acertar o tempo da letra">
+            <button type="button" onClick={() => nudge(-0.5)} aria-label="Letra mais tarde">
+              −0,5 s
+            </button>
+            <button
+              type="button"
+              className="lyrics-sync-value"
+              onClick={resetOffset}
+              disabled={offset === 0}
+              aria-label="Repor o tempo original da letra"
+            >
+              {offset === 0 ? 'Tempo da letra' : offsetText(offset)}
+            </button>
+            <button type="button" onClick={() => nudge(0.5)} aria-label="Letra mais cedo">
+              +0,5 s
+            </button>
+          </div>
+        )}
+
+        {lyrics && <p className="lyrics-source">Letra disponibilizada pelo LRCLIB</p>}
       </div>
     </div>,
     document.body,
