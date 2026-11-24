@@ -10,6 +10,7 @@ import {
   haVersaoNova,
   instalarAtualizacao,
   reloadApp,
+  versaoConhecida,
   versaoInstalada,
   versaoPublicada,
 } from '../lib/update'
@@ -104,8 +105,12 @@ export function Settings({ navigate }: { navigate: Navigate }) {
                     return
                   }
                   if (!haVersaoNova(publicada)) {
+                    // Sem a ponte nativa (APK antigo) não se sabe a versão instalada:
+                    // dizer "já tem a mais recente" seria mentira.
                     setUpdateNote(
-                      `Já tem a ${versaoInstalada().nome}, que é a mais recente.`,
+                      versaoConhecida()
+                        ? `Já tem a ${versaoInstalada().nome}, que é a mais recente.`
+                        : `Não consigo confirmar a versão instalada neste aparelho. A mais recente é a ${publicada.versao} — usa "Baixar o APK" para a instalar.`,
                     )
                     return
                   }

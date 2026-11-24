@@ -71,6 +71,14 @@ export function isAppEmpacotada(): boolean {
 }
 
 /**
+ * Sabemos a versão instalada? Só a app Android que injeta a ponte nativa a sabe dizer;
+ * no browser (e nos APK antigos, feitos noutro embrulho) temos apenas a versão do site.
+ */
+export function versaoConhecida(): boolean {
+  return appNativa() !== null
+}
+
+/**
  * Versão que está mesmo instalada no telemóvel. O site publicado traria sempre a sua
  * própria versão (a mesma que ele publica), por isso nunca detetava nada de novo.
  */
