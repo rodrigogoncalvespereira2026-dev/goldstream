@@ -46,7 +46,9 @@ const OFFSET_EVENT = 'sonora:lyrics-offset'
  */
 export function useLyricClock(lines: SyncedLine[], trackId: string | undefined) {
   const { currentTime } = usePlayerTime()
-  const { isPlaying } = usePlayer()
+  const { isPlaying: audioPlaying, watchInline, watchPlaying } = usePlayer()
+  // Com o vídeo na capa, é ele que anda: a letra segue o vídeo.
+  const isPlaying = audioPlaying || (watchInline && watchPlaying)
   const [index, setIndex] = useState(-1)
   const [offset, setOffset] = useState(0)
   const anchorRef = useRef({ time: currentTime, at: performance.now() })

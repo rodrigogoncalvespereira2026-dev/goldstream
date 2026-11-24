@@ -64,6 +64,11 @@ type PlayerValue = {
   openWatch: (videoId: string, options?: { inline?: boolean }) => void
   /** Volta ao áudio; `play` faz tocar mesmo que estivesse em pausa antes do vídeo. */
   closeWatch: (options?: { play?: boolean }) => void
+  /** O vídeo na capa está a andar (a letra e a barra seguem-no). */
+  watchPlaying: boolean
+  /** Tempo do vídeo na capa: passa a ser o tempo da barra e da letra. */
+  reportWatchTime: (seconds: number, duration?: number) => void
+  reportWatchPlaying: (playing: boolean) => void
   /** Hora (epoch ms) em que o temporizador de sono para o áudio; null = desligado. */
   sleepEndsAt: number | null
   startSleepTimer: (minutes: number) => void
@@ -1464,7 +1469,19 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // "Ver vídeo": o vídeo toca no YouTube e o áudio da app fica em pausa para não haver dois sons.
   const [watchVideoId, setWatchVideoId] = useState<string | null>(null)
   const [watchInline, setWatchInline] = useState(false)
+  const [watchPlaying, setWatchPlaying] = useState(false)
   const resumeAfterWatch = useRef(false)
+  /** Onde o vídeo ia: o áudio continua daí ao voltar. */
+  const watchTimeRef = useRef<number | null>(null)
+
+  const reportWatchTime = useCallback((seconds: number, total?: number) => {
+    if (!Number.isFinite(seconds) || seconds < 0) return
+    watchTimeRef.current = seconds
+    setCurrentTime(seconds)
+    if (total && Number.isFinite(total) && total > 0) setDuration(total)
+  }, [])
+
+  const reportWatchPlaying = useCallback((playing: boolean) => setWatchPlaying(playing), [])
 
   const openWatch = useCallback(
     (videoId: string, options?: { inline?: boolean }) => {
@@ -1474,6 +1491,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       resumeAfterWatch.current = resumeAfterWatch.current || intentRef.current.play
       setIntent(false)
       applyPlaybackNow(false)
+      watchTimeRef.current = null
+      setWatchPlaying(false)
       setWatchInline(Boolean(options?.inline))
       setWatchVideoId(videoId)
     },
@@ -1484,14 +1503,19 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     (options?: { play?: boolean }) => {
       setWatchVideoId(null)
       setWatchInline(false)
+      setWatchPlaying(false)
       const resume = resumeAfterWatch.current || Boolean(options?.play)
       resumeAfterWatch.current = false
       if (resume) {
         setIntent(true)
         applyPlaybackNow(true)
       }
+      // O áudio continua do ponto onde o vídeo ia, e não de onde tinha parado.
+      const watchedTo = watchTimeRef.current
+      watchTimeRef.current = null
+      if (watchedTo !== null) seek(watchedTo)
     },
-    [setIntent, applyPlaybackNow],
+    [setIntent, applyPlaybackNow, seek],
   )
 
   const timeValue = useMemo<PlayerTimeValue>(
@@ -1534,6 +1558,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       watchInline,
       openWatch,
       closeWatch,
+      watchPlaying,
+      reportWatchTime,
+      reportWatchPlaying,
     }),
     [
       current,
@@ -1569,6 +1596,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       watchInline,
       openWatch,
       closeWatch,
+      watchPlaying,
+      reportWatchTime,
+      reportWatchPlaying,
     ],
   )
 

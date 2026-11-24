@@ -5,6 +5,7 @@ import { fetchLyrics, type LyricsResult, parseSyncedLyrics, type SyncedLine } fr
 import { useLyricClock } from '../lib/useLyricClock'
 import { cx, formatTime } from '../lib/format'
 import { usePlayer, usePlayerTime } from '../lib/player'
+import { getYT, loadYouTubeApi, type YTPlayer } from '../lib/youtube'
 import { CoverImage } from './CoverImage'
 import { Slider } from './Slider'
 import { RadioButton } from './RadioButton'
@@ -51,6 +52,8 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
     closeWatch,
     watchVideoId,
     watchInline,
+    reportWatchTime,
+    reportWatchPlaying,
     queue,
     queueIndex,
     jumpTo,
@@ -95,6 +98,64 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
       openWatch(current.videoId, { inline: true })
     }
   }, [watching, current, watchVideoId, openWatch, closeWatch])
+
+  // O vídeo da capa manda no tempo: a barra e a letra seguem-no, o arrasto da
+  // barra mexe no vídeo e, no fim do vídeo, passa à faixa seguinte.
+  const videoFrameRef = useRef<HTMLIFrameElement>(null)
+  const videoPlayerRef = useRef<YTPlayer | null>(null)
+  useEffect(() => {
+    if (!watching || !watchVideoId) return
+    const frame = videoFrameRef.current
+    if (!frame) return
+    let cancelled = false
+    let timer = 0
+    void loadYouTubeApi()
+      .then(() => {
+        const YT = getYT()
+        if (cancelled || !YT?.Player) return
+        // Liga a API ao iframe que já existe (enablejsapi=1 no endereço).
+        new YT.Player(frame, {
+          events: {
+            onReady: (event) => {
+              if (cancelled) return
+              const player = event.target
+              videoPlayerRef.current = player
+              timer = window.setInterval(() => {
+                try {
+                  reportWatchTime(player.getCurrentTime?.() ?? 0, player.getDuration?.() ?? 0)
+                } catch {
+                  /* iframe a sair */
+                }
+              }, 250)
+            },
+            onStateChange: (event) => {
+              if (cancelled) return
+              reportWatchPlaying(event.data === 1)
+              if (event.data === 0) next()
+            },
+          },
+        })
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+      videoPlayerRef.current = null
+    }
+  }, [watching, watchVideoId, reportWatchTime, reportWatchPlaying, next])
+
+  const seekTo = (seconds: number) => {
+    if (watching) {
+      try {
+        videoPlayerRef.current?.seekTo?.(seconds, true)
+      } catch {
+        /* vídeo ainda a carregar */
+      }
+      reportWatchTime(seconds)
+      return
+    }
+    seek(seconds)
+  }
 
   // Minimizar o "agora tocando" com o vídeo aberto: volta ao áudio.
   useEffect(() => {
@@ -257,7 +318,8 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
               <div className="np-art is-video">
                 <iframe
                   key={watchVideoId}
-                  src={`https://www.youtube.com/embed/${watchVideoId}?autoplay=1&playsinline=1&rel=0&start=${videoStart}`}
+                  ref={videoFrameRef}
+                  src={`https://www.youtube.com/embed/${watchVideoId}?autoplay=1&playsinline=1&rel=0&enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}&start=${videoStart}`}
                   title={`Vídeo de ${current.title}`}
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                   allowFullScreen
@@ -313,7 +375,7 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
               <Slider
                 value={currentTime}
                 max={duration || 1}
-                onChange={seek}
+                onChange={seekTo}
                 ariaLabel="Progresso da música"
               />
               <div className="np-times">
