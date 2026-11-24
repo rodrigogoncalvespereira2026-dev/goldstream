@@ -21,7 +21,13 @@ import {
 } from './youtube'
 import { addListening, addPlay, flushStats } from './stats'
 import { trackPlaybackRequest } from './analytics'
-import { isWebView } from './platform'
+import {
+  assumirControlos,
+  controlarRetomaNativa,
+  isWebView,
+  permitirPausa,
+  scriptInjetado,
+} from './platform'
 import { logNative, logNativeCall, secsText } from './nativeLog'
 
 type RepeatMode = 'off' | 'all' | 'one'
@@ -299,6 +305,31 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     [nativePlatform],
   )
 
+  /**
+   * Marca que a pausa seguinte é pedida pela app (o evento não pode anular a
+   * intenção do utilizador). Não pode ficar presa: se o evento não vier, cai.
+   */
+  const ignorarPausaPropria = useCallback(() => {
+    selfPauseRef.current = true
+    window.setTimeout(() => {
+      selfPauseRef.current = false
+    }, 600)
+  }, [])
+
+  /**
+   * Pausa pedida pela app. No APK o script nativo engole o `pause()` do `<audio>`
+   * enquanto segura a música em segundo plano, por isso abre-se a janela.
+   */
+  const pausarAudio = useCallback(
+    (el: HTMLAudioElement) => {
+      if (el.paused) return
+      ignorarPausaPropria()
+      permitirPausa()
+      el.pause()
+    },
+    [ignorarPausaPropria],
+  )
+
   /** Manda o motor ativo calar/tocar já, sem esperar por efeitos nem pela fila. */
   const applyPlaybackNow = useCallback(
     (play: boolean) => {
@@ -337,10 +368,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       const audio = audioRef.current
       if (audio) {
         if (play) void audio.play().catch(() => {})
-        else {
-          selfPauseRef.current = true
-          audio.pause()
-        }
+        else pausarAudio(audio)
       }
       try {
         if (play) ytPlayerRef.current?.playVideo?.()
@@ -349,7 +377,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         /* player ainda não existe */
       }
     },
-    [nativePlatform],
+    [nativePlatform, pausarAudio],
   )
 
   const startSleepTimer = useCallback((minutes: number) => {
@@ -868,8 +896,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     if (!audio) return
     const src = current ? ytAudioSrc ?? current.src : ''
     if (!current || usesIframe || !src) {
-      selfPauseRef.current = true
-      audio.pause()
+      pausarAudio(audio)
       audio.removeAttribute('src')
       loadedIdRef.current = null
       return
@@ -877,7 +904,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     if (loadedIdRef.current !== current.id) {
       loadedIdRef.current = current.id
       setPlayerNotice(null)
-      selfPauseRef.current = true
+      // A troca de fonte pode disparar uma pausa que não é do utilizador.
+      ignorarPausaPropria()
+      permitirPausa()
       audio.src = src
       setCurrentTime(0)
       setDuration(durations[current.id] ?? current.duration ?? 0)
@@ -888,8 +917,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       // pôs em pausa pela notificação.
       if (audio.paused) void audio.play().catch(() => setIsPlaying(false))
     } else if (!audio.paused) {
-      selfPauseRef.current = true
-      audio.pause()
+      pausarAudio(audio)
     }
   }, [
     current,
@@ -901,6 +929,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     nativeReady,
     dropNativeAsset,
     queueNonce,
+    pausarAudio,
+    ignorarPausaPropria,
   ])
 
 
@@ -1431,6 +1461,41 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     }
   }, [applyPlaybackNow, setIntent])
 
+  // Os controlos do aviso passam a ser só da app. O script do APK, sem esta
+  // marca, além do evento também clicava nos botões do player (o "seguinte"
+  // saltava duas faixas e a pausa voltava atrás).
+  useEffect(() => {
+    assumirControlos()
+    // A retoma que o código nativo faz ao voltar à app só acontece se ainda
+    // quisermos tocar (uma pausa pedida no aviso não pode ser desfeita).
+    controlarRetomaNativa(() => intentRef.current.play)
+  }, [])
+
+  // O aviso do telemóvel lê a metadata da Media Session para mostrar o título, o
+  // artista e a capa. Sem isto, o aviso saía sem nome de música.
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return
+    const session = navigator.mediaSession
+    try {
+      if (!current) session.metadata = null
+      else if (typeof MediaMetadata !== 'undefined') {
+        session.metadata = new MediaMetadata({
+          title: current.title,
+          artist: current.artist,
+          album: current.albumTitle,
+          artwork: [{ src: new URL(current.cover, window.location.origin).href }],
+        })
+      }
+    } catch {
+      /* WebView sem MediaMetadata */
+    }
+    try {
+      session.playbackState = isPlaying ? 'playing' : 'paused'
+    } catch {
+      /* ação não suportada neste WebView */
+    }
+  }, [current, isPlaying])
+
   const changeVolume = useCallback((value: number) => {
     const clamped = Math.min(1, Math.max(0, value))
     setVolume(clamped)
@@ -1649,6 +1714,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     const bridge = (window as unknown as { GoldStreamNative?: { postMessage(data: string): void } })
       .GoldStreamNative
     if (!bridge || nativePlatform) return
+    // O script do APK já reporta o estado (com posição e duração); dois relatos
+    // diferentes deixavam a barra do aviso a saltar.
+    if (scriptInjetado()) return
     try {
       bridge.postMessage(
         JSON.stringify({
