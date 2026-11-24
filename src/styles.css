@@ -4976,15 +4976,17 @@ img {
 .is-webview .yt-sink {
   width: 200px;
   height: 200px;
-  contain: strict;
   /* Tem de ficar DENTRO do ecrã: um iframe de outro site fora do ecrã é
-     estrangulado pelo WebView (sem frames nem temporizadores) e o YouTube deixa
-     de alimentar o buffer — era isso que punha a música a engasgar. Fica atrás
-     da app, quase transparente e sem receber toques. */
+     estrangulado pelo WebView (sem frames nem temporizadores). E tem de ser
+     OPACO: um vídeo com opacity < 1 sai do caminho rápido de composição do
+     Android, os frames atrasam e o YouTube, que acerta o som pelos frames,
+     engasga o áudio (o "Ver vídeo", opaco, tocava liso). Fica escondido de
+     outra forma: com z-index -1 é desenhado por baixo do fundo opaco da
+     .app-shell (que não cria contexto de empilhamento). */
   right: auto;
   top: auto;
   left: 0;
   bottom: 0;
   z-index: -1;
-  opacity: 0.01;
+  opacity: 1;
 }
