@@ -4962,9 +4962,12 @@ img {
   mask-image: radial-gradient(circle, #000 0%, transparent 70%);
 }
 
-/* Barras do equalizador: animação contínua sem valor no telemóvel lento. */
+/* Barras do equalizador: animavam `height`, o que refaz o layout e repinta em
+   cada frame enquanto a música toca. No WebView o player do YouTube corre na
+   mesma thread que a página, por isso cada frame destes roubava-lhe tempo e o
+   som engasgava. Ficam paradas (as alturas fixas já dizem "a tocar"). */
 .is-webview .playing-bars i {
-  animation-duration: 1.4s;
+  animation: none !important;
 }
 
 /* Player escondido do YouTube: o tamanho do iframe decide a qualidade do vídeo

@@ -360,11 +360,18 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const startYtTimer = useCallback(
     (player: YTPlayer) => {
       stopYtTimer()
+      let lastSecond = -1
       ytTimerRef.current = window.setInterval(() => {
         try {
           const time = player.getCurrentTime?.() ?? 0
           const total = player.getDuration?.() ?? 0
-          setCurrentTime(time)
+          // No WebView o iframe partilha a thread com a página: só re-renderiza
+          // quando muda o segundo que a barra mostra.
+          const second = Math.floor(time)
+          if (!isWebView || second !== lastSecond) {
+            lastSecond = second
+            setCurrentTime(time)
+          }
           if (total > 0) setDuration(total)
         } catch {
           /* player destruído */
@@ -963,6 +970,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           rel: 0,
           playsinline: 1,
           modestbranding: 1,
+          // O player está escondido: sem controlos, anotações nem legendas, o
+          // YouTube não fica a redesenhar a sua própria barra dentro do iframe.
+          controls: 0,
+          disablekb: 1,
+          fs: 0,
+          iv_load_policy: 3,
+          cc_load_policy: 0,
           origin: window.location.origin,
         },
         ...(startVideo ? { videoId: startVideo } : {}),
