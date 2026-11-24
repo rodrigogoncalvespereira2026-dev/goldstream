@@ -9,7 +9,7 @@ import { ChevronDownIcon, VideoIcon } from './Icons'
  * pausa (senão ouvia-se a música e o vídeo ao mesmo tempo); ao fechar, volta a tocar.
  */
 export function WatchVideo() {
-  const { watchVideoId, closeWatch, current } = usePlayer()
+  const { watchVideoId, watchInline, closeWatch, current } = usePlayer()
 
   useEffect(() => {
     if (!watchVideoId) return
@@ -20,7 +20,8 @@ export function WatchVideo() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [watchVideoId, closeWatch])
 
-  if (!watchVideoId) return null
+  // No "agora tocando" o vídeo toca no lugar da capa: a folha não abre.
+  if (!watchVideoId || watchInline) return null
 
   const isCurrent = current?.videoId === watchVideoId
   const title = isCurrent ? current?.title ?? 'Vídeo' : 'Vídeo'
@@ -34,7 +35,7 @@ export function WatchVideo() {
   return (
     <div className="video-sheet" role="dialog" aria-modal="true" aria-label="Ver vídeo">
       <div className="video-top">
-        <button type="button" className="np-round" onClick={closeWatch} aria-label="Fechar vídeo">
+        <button type="button" className="np-round" onClick={() => closeWatch()} aria-label="Fechar vídeo">
           <ChevronDownIcon size={26} />
         </button>
         <span className="np-kicker">Vídeo</span>
@@ -58,7 +59,7 @@ export function WatchVideo() {
         <div className="video-meta">
           <h2>{current.title}</h2>
           <p>{current.artist}</p>
-          <button type="button" className="video-audio" onClick={closeWatch}>
+          <button type="button" className="video-audio" onClick={() => closeWatch()}>
             <VideoIcon size={17} />
             Voltar a ouvir só o áudio
           </button>

@@ -14,6 +14,7 @@ import { QueueSheet } from './QueueSheet'
 import {
   ChevronDownIcon,
   HeartIcon,
+  MusicNoteIcon,
   NextIcon,
   PauseIcon,
   PlusIcon,
@@ -47,6 +48,9 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
     isLiked,
     toggleLike,
     openWatch,
+    closeWatch,
+    watchVideoId,
+    watchInline,
     queue,
     queueIndex,
     jumpTo,
@@ -66,6 +70,36 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
   const [lyrics, setLyrics] = useState<LyricsResult | null>(null)
   const [syncedLines, setSyncedLines] = useState<SyncedLine[]>([])
   const [scrolled, setScrolled] = useState(false)
+  /** Segundo do áudio em que o vídeo começa (o vídeo continua de onde a música ia). */
+  const [videoStart, setVideoStart] = useState(0)
+
+  // Modo vídeo: o vídeo toca no lugar da capa e o áudio da app fica em pausa.
+  const watching = Boolean(watchInline && watchVideoId)
+
+  const showVideo = () => {
+    if (!current?.videoId) return
+    setVideoStart(Math.floor(currentTime))
+    openWatch(current.videoId, { inline: true })
+  }
+
+  // Faixa seguinte/anterior em modo vídeo: o vídeo acompanha a faixa nova. Uma
+  // faixa sem vídeo (catálogo) volta ao áudio.
+  useEffect(() => {
+    if (!watching) return
+    if (!current?.videoId) {
+      closeWatch({ play: true })
+      return
+    }
+    if (current.videoId !== watchVideoId) {
+      setVideoStart(0)
+      openWatch(current.videoId, { inline: true })
+    }
+  }, [watching, current, watchVideoId, openWatch, closeWatch])
+
+  // Minimizar o "agora tocando" com o vídeo aberto: volta ao áudio.
+  useEffect(() => {
+    if (!open && watching) closeWatch()
+  }, [open, watching, closeWatch])
   const [copied, setCopied] = useState(false)
 
   // A letra é pedida quando a música muda (só com o ecrã aberto, para não gastar dados à toa).
@@ -219,9 +253,22 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
 
         {current ? (
           <>
-            <div className="np-art">
-              <CoverImage src={current.cover} loading="eager" />
-            </div>
+            {watching && watchVideoId ? (
+              <div className="np-art is-video">
+                <iframe
+                  key={watchVideoId}
+                  src={`https://www.youtube.com/embed/${watchVideoId}?autoplay=1&playsinline=1&rel=0&start=${videoStart}`}
+                  title={`Vídeo de ${current.title}`}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allowFullScreen
+                  referrerPolicy="strict-origin-when-cross-origin"
+                />
+              </div>
+            ) : (
+              <div className="np-art">
+                <CoverImage src={current.cover} loading="eager" />
+              </div>
+            )}
 
             <div className="np-meta">
               <div className="np-text">
@@ -249,9 +296,14 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
 
             <div className="np-actions">
               {current.provider === 'youtube' && current.videoId && (
-                <button type="button" className="np-watch" onClick={() => openWatch(current.videoId as string)}>
-                  <VideoIcon size={17} />
-                  Ver vídeo
+                <button
+                  type="button"
+                  className={cx('np-watch', watching && 'is-on')}
+                  onClick={() => (watching ? closeWatch({ play: true }) : showVideo())}
+                  aria-pressed={watching}
+                >
+                  {watching ? <MusicNoteIcon size={17} /> : <VideoIcon size={17} />}
+                  {watching ? 'Ouvir em áudio' : 'Ver vídeo'}
                 </button>
               )}
               <RadioButton artist={current.artist} />
@@ -286,7 +338,8 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
               <button
                 type="button"
                 className="np-play"
-                onClick={toggle}
+                // Em modo vídeo o som é o do vídeo: o play volta ao áudio e toca.
+                onClick={() => (watching ? closeWatch({ play: true }) : toggle())}
                 aria-label={isPlaying ? 'Pausar' : 'Tocar'}
               >
                 {isPlaying ? <PauseIcon size={28} /> : <PlayIcon size={28} />}

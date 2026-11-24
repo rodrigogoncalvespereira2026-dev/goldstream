@@ -59,8 +59,11 @@ type PlayerValue = {
   playerNotice: PlayerNotice | null
   /** Vídeo aberto no ecrã "Ver vídeo" (pausa o áudio enquanto está aberto). */
   watchVideoId: string | null
-  openWatch: (videoId: string) => void
-  closeWatch: () => void
+  /** O vídeo aparece no lugar da capa do "agora tocando" (e não na folha por baixo). */
+  watchInline: boolean
+  openWatch: (videoId: string, options?: { inline?: boolean }) => void
+  /** Volta ao áudio; `play` faz tocar mesmo que estivesse em pausa antes do vídeo. */
+  closeWatch: (options?: { play?: boolean }) => void
   /** Hora (epoch ms) em que o temporizador de sono para o áudio; null = desligado. */
   sleepEndsAt: number | null
   startSleepTimer: (minutes: number) => void
@@ -1460,27 +1463,36 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // listas, cards e o resto da página várias vezes por segundo.
   // "Ver vídeo": o vídeo toca no YouTube e o áudio da app fica em pausa para não haver dois sons.
   const [watchVideoId, setWatchVideoId] = useState<string | null>(null)
+  const [watchInline, setWatchInline] = useState(false)
   const resumeAfterWatch = useRef(false)
 
   const openWatch = useCallback(
-    (videoId: string) => {
+    (videoId: string, options?: { inline?: boolean }) => {
       if (!videoId) return
-      resumeAfterWatch.current = intentRef.current.play
+      // Trocar de vídeo já em modo vídeo (faixa seguinte) não pode esquecer que
+      // o áudio estava a tocar antes do primeiro vídeo.
+      resumeAfterWatch.current = resumeAfterWatch.current || intentRef.current.play
       setIntent(false)
       applyPlaybackNow(false)
+      setWatchInline(Boolean(options?.inline))
       setWatchVideoId(videoId)
     },
     [setIntent, applyPlaybackNow],
   )
 
-  const closeWatch = useCallback(() => {
-    setWatchVideoId(null)
-    if (resumeAfterWatch.current) {
+  const closeWatch = useCallback(
+    (options?: { play?: boolean }) => {
+      setWatchVideoId(null)
+      setWatchInline(false)
+      const resume = resumeAfterWatch.current || Boolean(options?.play)
       resumeAfterWatch.current = false
-      setIntent(true)
-      applyPlaybackNow(true)
-    }
-  }, [setIntent, applyPlaybackNow])
+      if (resume) {
+        setIntent(true)
+        applyPlaybackNow(true)
+      }
+    },
+    [setIntent, applyPlaybackNow],
+  )
 
   const timeValue = useMemo<PlayerTimeValue>(
     () => ({ currentTime, duration: effectiveDuration, seek }),
@@ -1519,6 +1531,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       attachStage,
       playerNotice,
       watchVideoId,
+      watchInline,
       openWatch,
       closeWatch,
     }),
@@ -1553,6 +1566,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       attachStage,
       playerNotice,
       watchVideoId,
+      watchInline,
       openWatch,
       closeWatch,
     ],
