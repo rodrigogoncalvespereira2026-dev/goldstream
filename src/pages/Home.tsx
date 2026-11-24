@@ -8,14 +8,14 @@ import type { Navigate } from '../lib/nav'
 
 /** Cartões de descoberta: cada um abre a busca já com o tema escolhido. */
 const THEMES = [
-  { label: '#tokusatsu', query: 'tokusatsu opening themes', from: '#7f1d3a', to: '#3b0a1c' },
-  { label: '#temas de genérico', query: 'temas de genéricos de séries', from: '#1e3a8a', to: '#0b1638' },
-  { label: '#anime', query: 'anime openings', from: '#c2410c', to: '#3b1206' },
-  { label: '#power rangers', query: 'power rangers theme song', from: '#b91c1c', to: '#3f0a0a' },
-  { label: '#pimba', query: 'pimba mix', from: '#a16207', to: '#3a2405' },
-  { label: '#fado', query: 'fado clássico', from: '#4c1d95', to: '#1c0a38' },
-  { label: '#rock português', query: 'rock português anos 80', from: '#0f766e', to: '#052b28' },
-  { label: '#k-pop', query: 'kpop hits', from: '#be185d', to: '#3f0722' },
+  { name: 'Tokusatsu', query: 'tokusatsu opening themes', color: '#9f1239' },
+  { name: 'Temas de genérico', query: 'temas de genéricos de séries', color: '#4338ca' },
+  { name: 'Anime', query: 'anime openings', color: '#c2410c' },
+  { name: 'Power Rangers', query: 'power rangers theme song', color: '#b91c1c' },
+  { name: 'Pimba', query: 'pimba mix', color: '#a16207' },
+  { name: 'Fado', query: 'fado clássico', color: '#6d28d9' },
+  { name: 'Rock português', query: 'rock português anos 80', color: '#0f766e' },
+  { name: 'K-pop', query: 'kpop hits', color: '#be185d' },
 ]
 
 export function Home({ navigate }: { navigate: Navigate }) {
@@ -125,16 +125,20 @@ export function Home({ navigate }: { navigate: Navigate }) {
       )}
 
       <Section title="Descobre algo novo" note="Temas para começar">
-        <div className="shelf">
+        <div className="theme-grid">
           {THEMES.map((theme) => (
             <button
-              key={theme.label}
+              key={theme.name}
               type="button"
               className="theme-card"
-              style={{ background: `linear-gradient(140deg, ${theme.from}, ${theme.to})` }}
               onClick={() => navigate({ type: 'search', query: theme.query })}
             >
-              {theme.label}
+              <span
+                className="theme-card-mark"
+                style={{ background: theme.color }}
+                aria-hidden="true"
+              />
+              <span className="theme-card-name">{theme.name}</span>
             </button>
           ))}
         </div>
