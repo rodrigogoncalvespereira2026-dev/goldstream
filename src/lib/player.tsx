@@ -19,7 +19,7 @@ import {
   resolveYouTubeAudio,
   type YTPlayer,
 } from './youtube'
-import { addListening, addPlay } from './stats'
+import { addListening, addPlay, flushStats } from './stats'
 import { trackPlaybackRequest } from './analytics'
 import { logNative, logNativeCall, secsText } from './nativeLog'
 
@@ -526,7 +526,16 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           } · ${secsText(event.currentTime)}/${secsText(event.duration)}`,
         )
         if (event.isPlaying) lastTickRef.current = Date.now()
-        if (typeof event.currentTime === 'number') setCurrentTime(event.currentTime)
+        if (typeof event.currentTime === 'number') {
+          // O plugin emite estado em cada tique: sem o mesmo travão de 4 Hz da
+          // barra, cada emissão re-renderizava a app toda e o WebView engasgava
+          // (o player ficava a arrastar). Parado, atualiza logo.
+          const now = Date.now()
+          if (!event.isPlaying || now - lastTimeUiRef.current >= 250) {
+            lastTimeUiRef.current = now
+            setCurrentTime(event.currentTime)
+          }
+        }
         if (typeof event.duration === 'number' && event.duration > 0) {
           nativeDurationRef.current = event.duration
           setDuration(event.duration)
@@ -864,7 +873,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         .catch((error: unknown) =>
           logNative('error', `amostra → ${error instanceof Error ? error.message : String(error)}`),
         )
-    }, 1500)
+    }, 5000)
     return () => window.clearInterval(timer)
   }, [nativePlatform, isPlaying, usesIframe])
 
@@ -1408,6 +1417,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     return () => {
       tick()
       window.clearInterval(timer)
+      // Ao pausar ou trocar de faixa, os segundos em memória vão para disco.
+      flushStats()
     }
   }, [isPlaying, currentId])
 

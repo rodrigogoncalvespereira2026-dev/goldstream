@@ -4897,3 +4897,72 @@ img {
   font-size: 12px;
   line-height: 1.5;
 }
+
+/* ---------- Modo leve dentro do APK (WebView) ----------
+   Dentro do APK a página corre no WebView do Android, bem mais lento a compor
+   do que o Chrome: três manchas de 48vmax com blur(48px) a mexer-se, o brilho
+   a deslocar o background-position e os backdrop-filter das barras fixas
+   obrigavam a recalcular filtros e a repintar o ecrã inteiro em cada frame. Era
+   isto que fazia a app arrastar. Aqui o fundo fica estático e macio (máscara em
+   vez de blur) e as barras ficam opacas. No computador nada disto se aplica. */
+
+.is-webview .bg-blob,
+.is-webview .bg-shine {
+  animation: none !important;
+  will-change: auto;
+}
+
+.is-webview .bg-blob {
+  /* A mesma mancha difusa, sem o blur de 48px que o telemóvel não aguenta: a
+     máscara radial faz o degradê e a camada é rasterizada uma única vez. */
+  filter: none;
+  -webkit-mask-image: radial-gradient(
+    circle at 50% 50%,
+    #000 0%,
+    rgba(0, 0, 0, 0.55) 38%,
+    transparent 70%
+  );
+  mask-image: radial-gradient(
+    circle at 50% 50%,
+    #000 0%,
+    rgba(0, 0, 0, 0.55) 38%,
+    transparent 70%
+  );
+}
+
+/* Brilhos que animam o background-position repintam o ecrã todo por frame. */
+.is-webview .bg-shine {
+  display: none;
+}
+
+/* Barras translúcidas: sem re-borrar o conteúdo por baixo em cada frame. */
+.is-webview .topbar.is-scrolled {
+  background: rgba(12, 12, 12, 0.94);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.is-webview .mobile-nav {
+  background: #0a0a0a;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.is-webview .np-top {
+  background: rgba(10, 10, 10, 0.97);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* Outras manchas com blur pesado (ecrã de login e miniaturas dos fundos). */
+.is-webview .auth-blob,
+.is-webview .bg-scene.is-preview .bg-blob {
+  filter: none;
+  -webkit-mask-image: radial-gradient(circle, #000 0%, transparent 70%);
+  mask-image: radial-gradient(circle, #000 0%, transparent 70%);
+}
+
+/* Barras do equalizador: animação contínua sem valor no telemóvel lento. */
+.is-webview .playing-bars i {
+  animation-duration: 1.4s;
+}

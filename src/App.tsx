@@ -81,7 +81,9 @@ function Shell() {
   )
 
   useEffect(() => {
-    scrollerRef.current?.scrollTo({ top: 0 })
+    // `auto` ignora o scroll-behavior: smooth do CSS: o salto de página tem de
+    // ser imediato, senão parece que a app ficou presa a rolar.
+    scrollerRef.current?.scrollTo({ top: 0, behavior: 'auto' })
     setScrolled(false)
   }, [view])
 
@@ -222,7 +224,10 @@ export default function App() {
     }
     document.addEventListener('visibilitychange', onHidden)
     window.addEventListener('pagehide', save)
-    const timer = window.setInterval(save, 15000)
+    // Poucas vezes: cada gravação lê e reescreve todos os dados da conta de
+    // forma síncrona e no telemóvel engasgava o player. O que interessa é
+    // gravar ao sair (visibilitychange/pagehide), que já está acima.
+    const timer = window.setInterval(save, 60000)
     return () => {
       save()
       document.removeEventListener('visibilitychange', onHidden)
