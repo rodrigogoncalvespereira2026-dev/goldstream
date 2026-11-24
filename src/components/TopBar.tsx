@@ -1,7 +1,6 @@
-import { ArrowLeftIcon, ArrowRightIcon, RefreshIcon, SearchIcon } from './Icons'
+import { ArrowLeftIcon, ArrowRightIcon, SearchIcon } from './Icons'
 import type { Navigate } from '../lib/nav'
 import { cx } from '../lib/format'
-import { reloadApp } from '../lib/update'
 import { useProfile } from '../lib/profile'
 import { Avatar } from './Avatar'
 
@@ -74,16 +73,6 @@ export function TopBar({
       >
         <Avatar name={profile.name} photo={profile.photo} />
         <span className="user-name">{profile.name}</span>
-      </button>
-
-      <button
-        type="button"
-        className="topbar-refresh"
-        onClick={reloadApp}
-        aria-label="Atualizar app"
-        title="Atualizar app"
-      >
-        <RefreshIcon size={20} />
       </button>
     </div>
   )

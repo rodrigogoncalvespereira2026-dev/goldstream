@@ -1915,14 +1915,36 @@ img {
     height: 0;
   }
 
-  .nav-buttons,
+  /* No telemóvel fica só o "voltar", à esquerda da pesquisa. */
+  .nav-buttons {
+    display: flex;
+    gap: 6px;
+  }
+
+  .nav-buttons .nav-round {
+    width: 40px;
+    height: 40px;
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text);
+  }
+
+  .nav-buttons .nav-round:not(:disabled):hover {
+    background: rgba(255, 255, 255, 0.18);
+  }
+
+  /* O "avançar" não cabe nem faz falta no telemóvel. */
+  .nav-buttons .nav-round:last-child {
+    display: none;
+  }
+
   .topbar-right {
     display: none;
   }
 
   .search-field {
     max-width: none;
-    width: 100%;
+    width: auto;
+    min-width: 0;
   }
 
   .page-title {
