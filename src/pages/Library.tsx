@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ALBUMS, PLAYLISTS } from '../lib/catalog'
 import { HeartIcon, MusicNoteIcon, PlayIcon, PlusIcon, TrashIcon } from '../components/Icons'
 import { createPlaylist, deletePlaylist, useUserPlaylists } from '../lib/userPlaylists'
+import { useHidden } from '../lib/hidden'
 import { cx, plural } from '../lib/format'
 import { usePlayer } from '../lib/player'
 import type { Navigate } from '../lib/nav'
@@ -16,6 +17,9 @@ export function Library({ navigate }: { navigate: Navigate }) {
   /** Playlist a pedir confirmação para apagar (a confirmação é nossa, o
    *  window.confirm não abre no WebView do APK). */
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [hidden, hide, unhideAll] = useHidden()
+  const catalogPlaylists = PLAYLISTS.filter((playlist) => !hidden.includes(playlist.id))
+  const catalogAlbums = ALBUMS.filter((album) => !hidden.includes(album.id))
 
   const showPlaylists = filter !== 'albums'
   const showAlbums = filter !== 'playlists'
@@ -43,6 +47,15 @@ export function Library({ navigate }: { navigate: Navigate }) {
           </button>
         ))}
       </div>
+
+      {hidden.length > 0 && (
+        <p className="library-hidden-note">
+          {plural(hidden.length, 'item escondido', 'itens escondidos')} da biblioteca ·{' '}
+          <button type="button" className="inline-link" onClick={unhideAll}>
+            Mostrar tudo
+          </button>
+        </p>
+      )}
 
       {showPlaylists && (
         <section className="section">
@@ -178,7 +191,7 @@ export function Library({ navigate }: { navigate: Navigate }) {
               </div>
             ))}
 
-            {PLAYLISTS.map((playlist) => (
+            {catalogPlaylists.map((playlist) => (
               <div
                 key={playlist.id}
                 className="library-row"
@@ -197,17 +210,30 @@ export function Library({ navigate }: { navigate: Navigate }) {
                     {plural(playlist.trackIds.length, 'música', 'músicas')}
                   </span>
                 </span>
-                <button
-                  type="button"
-                  className="library-row-play"
-                  aria-label={`Tocar ${playlist.name}`}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    playQueue(playlist.trackIds, playlist.trackIds[0])
-                  }}
-                >
-                  <PlayIcon size={20} />
-                </button>
+                <span className="library-row-actions">
+                  <button
+                    type="button"
+                    className="library-row-play"
+                    aria-label={`Tocar ${playlist.name}`}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      playQueue(playlist.trackIds, playlist.trackIds[0])
+                    }}
+                  >
+                    <PlayIcon size={20} />
+                  </button>
+                  <button
+                    type="button"
+                    className="library-row-hide"
+                    aria-label={`Tirar ${playlist.name} da biblioteca`}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      hide(playlist.id)
+                    }}
+                  >
+                    <span aria-hidden="true">×</span>
+                  </button>
+                </span>
               </div>
             ))}
           </div>
@@ -220,7 +246,7 @@ export function Library({ navigate }: { navigate: Navigate }) {
             <h2>Álbuns</h2>
           </div>
           <div className="library-rows">
-            {ALBUMS.map((album) => (
+            {catalogAlbums.map((album) => (
               <div
                 key={album.id}
                 className="library-row"
@@ -238,17 +264,30 @@ export function Library({ navigate }: { navigate: Navigate }) {
                     Álbum · {album.artist} · {album.year}
                   </span>
                 </span>
-                <button
-                  type="button"
-                  className="library-row-play"
-                  aria-label={`Tocar ${album.title}`}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    playQueue(album.trackIds, album.trackIds[0])
-                  }}
-                >
-                  <PlayIcon size={20} />
-                </button>
+                <span className="library-row-actions">
+                  <button
+                    type="button"
+                    className="library-row-play"
+                    aria-label={`Tocar ${album.title}`}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      playQueue(album.trackIds, album.trackIds[0])
+                    }}
+                  >
+                    <PlayIcon size={20} />
+                  </button>
+                  <button
+                    type="button"
+                    className="library-row-hide"
+                    aria-label={`Tirar ${album.title} da biblioteca`}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      hide(album.id)
+                    }}
+                  >
+                    <span aria-hidden="true">×</span>
+                  </button>
+                </span>
               </div>
             ))}
           </div>

@@ -1580,6 +1580,34 @@ img {
   gap: 6px;
 }
 
+/* × para tirar uma playlist/álbum do catálogo da biblioteca. */
+.library-row-hide {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 50%;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.library-row-hide span {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.library-row-hide:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.library-hidden-note {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
 .library-row-confirm .danger-button,
 .library-row-confirm .ghost-button {
   height: 34px;
