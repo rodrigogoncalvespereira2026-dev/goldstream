@@ -384,7 +384,18 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     audio.preload = 'auto'
     audioRef.current = audio
 
-    const onTime = () => setCurrentTime(audio.currentTime)
+    // No telemóvel só re-renderiza quando muda o segundo: a barra mostra segundos
+    // e cada render a mais rouba tempo ao WebView enquanto o áudio toca.
+    let lastSecond = -1
+    const onTime = () => {
+      const time = audio.currentTime
+      if (isWebView) {
+        const second = Math.floor(time)
+        if (second === lastSecond) return
+        lastSecond = second
+      }
+      setCurrentTime(time)
+    }
     const onMeta = () => {
       if (Number.isFinite(audio.duration) && audio.duration > 0) setDuration(audio.duration)
       setPlayerNotice(null)

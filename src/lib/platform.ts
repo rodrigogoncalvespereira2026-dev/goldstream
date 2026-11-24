@@ -1,10 +1,11 @@
 import { Capacitor } from '@capacitor/core'
 
 /**
- * Corre dentro de um WebView do Android: o APK da Capacitor ou um conversor
- * "site → APK" (que só embrulha o site). O WebView compõe e descodifica muito
- * pior do que o Chrome, por isso a app poupa onde pode.
+ * Corre num telemóvel Android: o APK da Capacitor, um conversor "site → APK"
+ * (que só embrulha o site num WebView) ou o próprio browser. Nem todos os
+ * conversores deixam o "; wv)" no user agent, por isso qualquer Android liga o
+ * modo leve — o WebView compõe e descodifica muito pior do que o Chrome no PC.
  */
 export const isWebView: boolean =
   typeof navigator !== 'undefined' &&
-  (Capacitor.isNativePlatform() || /;\s*wv\)/.test(navigator.userAgent))
+  (Capacitor.isNativePlatform() || /;\s*wv\)|Android/i.test(navigator.userAgent))
