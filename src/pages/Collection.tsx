@@ -32,7 +32,7 @@ type CollectionData = {
 }
 
 export function Collection({ view, navigate }: { view: CollectionView; navigate: Navigate }) {
-  const { liked, durations, playQueue, current, isPlaying, toggle, toggleLike } = usePlayer()
+  const { liked, durations, playQueue, current, isPlaying, toggle } = usePlayer()
 
   const data = useMemo<CollectionData | null>(() => {
     if (view.type === 'album') {
@@ -216,8 +216,6 @@ export function Collection({ view, navigate }: { view: CollectionView; navigate:
               index={index}
               showCover={view.type === 'playlist' || view.type === 'liked'}
               showAlbum={view.type !== 'album'}
-              // Nas músicas curtidas o × tira a música da lista, tal como o coração.
-              onRemove={data.liked ? () => toggleLike(track.id) : undefined}
               onPlay={() => {
                 if (current?.id === track.id) toggle()
                 else playQueue(data.trackIds, track.id)
