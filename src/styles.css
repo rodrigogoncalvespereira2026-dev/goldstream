@@ -4974,4 +4974,10 @@ img {
   width: 200px;
   height: 200px;
   contain: strict;
+  /* Fora do ecrã (e não só transparente): o Chrome deixa de desenhar os frames
+     de um iframe que não está à vista, mas o som continua a tocar. */
+  right: auto;
+  bottom: auto;
+  left: -10000px;
+  top: 0;
 }

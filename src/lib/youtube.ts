@@ -373,6 +373,12 @@ export async function resolveYouTubeAudio(
   // Todas as instâncias ao mesmo tempo e com tempo limite: antes eram pedidas uma
   // a uma e sem limite, e uma instância pendurada deixava a música dezenas de
   // segundos sem arrancar (era o "travado" ao carregar play no telemóvel).
+  // Se as instâncias estão todas em baixo, nem se pergunta durante uns minutos:
+  // a faixa vai logo para o player do YouTube em vez de esperar pelos erros.
+  if (Date.now() < pipedDownUntil) {
+    audioFailureCache.set(videoId, Date.now())
+    return null
+  }
   const local = new AbortController()
   const abortAll = () => local.abort()
   signal?.addEventListener('abort', abortAll)
@@ -388,10 +394,16 @@ export async function resolveYouTubeAudio(
         return picked
       }),
     )
+    pipedMisses = 0
     audioStreamCache.set(videoId, url)
     return url
   } catch (error) {
     if (signal?.aborted) throw error
+    pipedMisses += 1
+    if (pipedMisses >= 2) {
+      pipedMisses = 0
+      pipedDownUntil = Date.now() + PIPED_PAUSE_MS
+    }
   } finally {
     clearTimeout(timer)
     signal?.removeEventListener('abort', abortAll)
@@ -403,6 +415,10 @@ export async function resolveYouTubeAudio(
 }
 
 const PIPED_TIMEOUT_MS = 6000
+/** Depois de duas faixas seguidas sem resposta de nenhuma instância, pausa o Piped. */
+const PIPED_PAUSE_MS = 10 * 60_000
+let pipedMisses = 0
+let pipedDownUntil = 0
 
 /**
  * Escolhe o fluxo de áudio. No WebView do telemóvel o de maior bitrate (passa por
