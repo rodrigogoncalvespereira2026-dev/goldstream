@@ -1,6 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { Capacitor } from '@capacitor/core'
+import { isWebView } from './lib/platform'
 import App from './App'
 import './styles.css'
 import { applyAccent, readAccent } from './lib/theme'
@@ -12,7 +12,6 @@ applyAccent(readAccent())
 // as manchas do fundo com blur a animar e os backdrop-filter das barras deixam
 // a app a arrastar. A marca `is-webview` liga o modo leve do CSS (fim do
 // styles.css). Fica no <html> para valer logo no primeiro desenho.
-const isWebView = Capacitor.isNativePlatform() || /;\s*wv\)/.test(navigator.userAgent)
 if (isWebView) document.documentElement.classList.add('is-webview')
 
 const container = document.getElementById('root')

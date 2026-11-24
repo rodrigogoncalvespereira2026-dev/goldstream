@@ -4966,3 +4966,12 @@ img {
 .is-webview .playing-bars i {
   animation-duration: 1.4s;
 }
+
+/* Player escondido do YouTube: o tamanho do iframe decide a qualidade do vídeo
+   que o telemóvel descodifica. No mínimo aceite pelo YouTube, fica em 144p/240p
+   em vez de 480p/720p, e só o som é que interessa. */
+.is-webview .yt-sink {
+  width: 200px;
+  height: 200px;
+  contain: strict;
+}

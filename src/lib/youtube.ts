@@ -1,5 +1,6 @@
 import { Capacitor, registerPlugin } from '@capacitor/core'
 import { registerTracks, type Track } from './catalog'
+import { isWebView } from './platform'
 
 const API = 'https://www.googleapis.com/youtube/v3'
 
@@ -20,6 +21,7 @@ export type YTPlayer = {
   getDuration?: () => number
   loadVideoById?: (videoId: string) => void
   cueVideoById?: (videoId: string) => void
+  setPlaybackQuality?: (quality: string) => void
   destroy?: () => void
 }
 
@@ -368,25 +370,57 @@ export async function resolveYouTubeAudio(
     return null
   }
 
-  for (const host of PIPED_HOSTS) {
-    try {
-      const response = await fetch(`https://${host}/streams/${videoId}`, { signal })
-      if (!response.ok) continue
-      const payload = (await response.json()) as PipedStreamsPayload
-      const streams = (payload.audioStreams ?? []).filter((item) => Boolean(item.url))
-      if (!streams.length) continue
-      streams.sort((a, b) => (b.bitrate ?? 0) - (a.bitrate ?? 0))
-      const url = streams[0].url
-      if (!url) continue
-      audioStreamCache.set(videoId, url)
-      return url
-    } catch (error) {
-      if (signal?.aborted) throw error
-    }
+  // Todas as instâncias ao mesmo tempo e com tempo limite: antes eram pedidas uma
+  // a uma e sem limite, e uma instância pendurada deixava a música dezenas de
+  // segundos sem arrancar (era o "travado" ao carregar play no telemóvel).
+  const local = new AbortController()
+  const abortAll = () => local.abort()
+  signal?.addEventListener('abort', abortAll)
+  const timer = setTimeout(abortAll, PIPED_TIMEOUT_MS)
+  try {
+    const url = await Promise.any(
+      PIPED_HOSTS.map(async (host) => {
+        const response = await fetch(`https://${host}/streams/${videoId}`, { signal: local.signal })
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        const payload = (await response.json()) as PipedStreamsPayload
+        const picked = pickAudioStream(payload.audioStreams ?? [])
+        if (!picked) throw new Error('sem áudio')
+        return picked
+      }),
+    )
+    audioStreamCache.set(videoId, url)
+    return url
+  } catch (error) {
+    if (signal?.aborted) throw error
+  } finally {
+    clearTimeout(timer)
+    signal?.removeEventListener('abort', abortAll)
+    local.abort()
   }
 
   audioFailureCache.set(videoId, Date.now())
   return null
+}
+
+const PIPED_TIMEOUT_MS = 6000
+
+/**
+ * Escolhe o fluxo de áudio. No WebView do telemóvel o de maior bitrate (passa por
+ * um proxy público) não chega a tempo e o som engasga: aí fica o mais leve que
+ * ainda soa bem (~128 kbps, de preferência m4a, que todo o Android descodifica).
+ */
+const pickAudioStream = (all: PipedAudioStream[]): string | null => {
+  const streams = all.filter((item) => Boolean(item.url))
+  if (!streams.length) return null
+  if (!isWebView) {
+    streams.sort((a, b) => (b.bitrate ?? 0) - (a.bitrate ?? 0))
+    return streams[0].url ?? null
+  }
+  const score = (item: PipedAudioStream) =>
+    Math.abs((item.bitrate ?? 128_000) - 128_000) +
+    (item.mimeType?.includes('mp4') ? 0 : 40_000)
+  streams.sort((a, b) => score(a) - score(b))
+  return streams[0].url ?? null
 }
 
 /** Esquece uma falha recente: a próxima tentativa volta a pedir o áudio ao YouTube. */

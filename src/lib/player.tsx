@@ -21,6 +21,7 @@ import {
 } from './youtube'
 import { addListening, addPlay, flushStats } from './stats'
 import { trackPlaybackRequest } from './analytics'
+import { isWebView } from './platform'
 import { logNative, logNativeCall, secsText } from './nativeLog'
 
 type RepeatMode = 'off' | 'all' | 'one'
@@ -961,6 +962,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
             const track = currentRef.current
             setPlayerNotice(null)
             try {
+              // Só o som interessa: no WebView pedir o vídeo mais pequeno poupa o
+              // descodificador (o YouTube pode ignorar, o tamanho do iframe ajuda).
+              if (isWebView) instance.setPlaybackQuality?.('tiny')
               instance.setVolume?.(mutedRef.current ? 0 : Math.round(volumeRef.current * 100))
               if (track?.videoId) {
                 if (startVideo !== track.videoId) {
@@ -1099,8 +1103,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // Read real track lengths once so the lists show accurate durations.
   // No telemóvel não: aqui cada sonda é um player a mais no WebView, a puxar metadata
   // de todas as faixas ao mesmo tempo, a competir com o ExoPlayer e com a rede.
+  // Num WebView (APK feito a partir do site) também não: eram 19 leitores a abrir
+  // ao mesmo tempo que a música, a disputar rede e descodificador.
   useEffect(() => {
-    if (nativePlatform) return
+    if (nativePlatform || isWebView) return
     let cancelled = false
     const probes: HTMLAudioElement[] = []
     TRACKS.forEach((track) => {
