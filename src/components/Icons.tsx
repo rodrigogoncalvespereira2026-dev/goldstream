@@ -103,6 +103,14 @@ export const PlusIcon = ({ size = 24, ...rest }: IconProps) => (
   </svg>
 )
 
+export const TrashIcon = ({ size = 24, ...rest }: IconProps) => (
+  <svg {...base(size)} {...rest}>
+    <path d="M4.5 7h15M9.5 7V4.8h5V7" />
+    <path d="M6.6 7l.8 12a1.7 1.7 0 0 0 1.7 1.6h5.8a1.7 1.7 0 0 0 1.7-1.6l.8-12" />
+    <path d="M10.4 11v5.6M13.6 11v5.6" />
+  </svg>
+)
+
 export const MoreIcon = ({ size = 24, ...rest }: IconProps) => (
   <svg {...base(size)} {...rest} fill="currentColor" stroke="none">
     <circle cx="5" cy="12" r="1.8" />

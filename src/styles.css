@@ -1551,6 +1551,42 @@ img {
   color: var(--accent);
 }
 
+/* Lixo para apagar uma playlist direto da biblioteca. Sempre visível: no
+   telemóvel não há hover. */
+.library-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.library-row-trash {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex: none;
+  border-radius: 50%;
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.14);
+}
+
+.library-row-trash:hover {
+  background: rgba(248, 113, 113, 0.26);
+}
+
+.library-row-confirm {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.library-row-confirm .danger-button,
+.library-row-confirm .ghost-button {
+  height: 34px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+
 /* ---------- player ---------- */
 
 .player {
@@ -2247,7 +2283,7 @@ img {
   }
 
   .library-row {
-    grid-template-columns: 56px minmax(0, 1fr) 40px;
+    grid-template-columns: 56px minmax(0, 1fr) auto;
     gap: 10px;
     padding-inline: 4px;
   }

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { ALBUMS, PLAYLISTS } from '../lib/catalog'
-import { HeartIcon, MusicNoteIcon, PlayIcon, PlusIcon } from '../components/Icons'
-import { createPlaylist, useUserPlaylists } from '../lib/userPlaylists'
+import { HeartIcon, MusicNoteIcon, PlayIcon, PlusIcon, TrashIcon } from '../components/Icons'
+import { createPlaylist, deletePlaylist, useUserPlaylists } from '../lib/userPlaylists'
 import { cx, plural } from '../lib/format'
 import { usePlayer } from '../lib/player'
 import type { Navigate } from '../lib/nav'
@@ -13,6 +13,9 @@ export function Library({ navigate }: { navigate: Navigate }) {
   const mine = useUserPlaylists()
   const [filter, setFilter] = useState<Filter>('all')
   const [newName, setNewName] = useState('')
+  /** Playlist a pedir confirmação para apagar (a confirmação é nossa, o
+   *  window.confirm não abre no WebView do APK). */
+  const [deleting, setDeleting] = useState<string | null>(null)
 
   const showPlaylists = filter !== 'albums'
   const showAlbums = filter !== 'playlists'
@@ -120,19 +123,58 @@ export function Library({ navigate }: { navigate: Navigate }) {
                     A tua playlist · {plural(playlist.trackIds.length, 'música', 'músicas')}
                   </span>
                 </span>
-                <button
-                  type="button"
-                  className="library-row-play"
-                  aria-label={`Tocar ${playlist.name}`}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    if (playlist.trackIds.length) {
-                      playQueue(playlist.trackIds, playlist.trackIds[0])
-                    }
-                  }}
-                >
-                  <PlayIcon size={20} />
-                </button>
+                {deleting === playlist.id ? (
+                  <span className="library-row-confirm">
+                    <button
+                      type="button"
+                      className="danger-button"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        deletePlaylist(playlist.id)
+                        setDeleting(null)
+                      }}
+                    >
+                      Apagar
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost-button"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        setDeleting(null)
+                      }}
+                    >
+                      Não
+                    </button>
+                  </span>
+                ) : (
+                  <span className="library-row-actions">
+                    <button
+                      type="button"
+                      className="library-row-play"
+                      aria-label={`Tocar ${playlist.name}`}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        if (playlist.trackIds.length) {
+                          playQueue(playlist.trackIds, playlist.trackIds[0])
+                        }
+                      }}
+                    >
+                      <PlayIcon size={20} />
+                    </button>
+                    <button
+                      type="button"
+                      className="library-row-trash"
+                      aria-label={`Apagar a playlist ${playlist.name}`}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        setDeleting(playlist.id)
+                      }}
+                    >
+                      <TrashIcon size={18} />
+                    </button>
+                  </span>
+                )}
               </div>
             ))}
 

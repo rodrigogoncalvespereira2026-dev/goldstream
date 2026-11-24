@@ -8,7 +8,7 @@ import {
   useUserPlaylists,
 } from '../lib/userPlaylists'
 import { TrackRow } from '../components/Cards'
-import { MusicNoteIcon, PlayIcon } from '../components/Icons'
+import { MusicNoteIcon, PlayIcon, TrashIcon } from '../components/Icons'
 import { formatLongDuration, plural } from '../lib/format'
 import type { Navigate } from '../lib/nav'
 
@@ -115,6 +115,7 @@ export function MyPlaylist({ id, navigate }: { id: string; navigate: Navigate })
                 className="ghost-button is-danger"
                 onClick={() => setConfirmingDelete(true)}
               >
+                <TrashIcon size={15} />
                 Apagar
               </button>
             )}
