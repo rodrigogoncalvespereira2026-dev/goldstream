@@ -2321,7 +2321,9 @@ img {
     z-index: 100;
     display: block;
     overflow-y: auto;
-    padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+    /* O recuo da barra de estado vive dentro do cabeçalho (ver .np-top): aqui
+       em cima deixava uma faixa por onde a capa passava por cima do cabeçalho. */
+    padding: 0 0 env(safe-area-inset-bottom);
   }
 
   .np-inner {
@@ -2331,7 +2333,7 @@ img {
     margin: 0 auto;
     display: flex;
     flex-direction: column;
-    padding: 12px var(--np-x) 20px;
+    padding: 0 var(--np-x) 20px;
   }
 
   /* Fica agarrado ao topo: as letras e a fila fazem o conteúdo passar do
@@ -2340,9 +2342,11 @@ img {
     position: sticky;
     top: 0;
     z-index: 2;
-    height: 60px;
+    /* Cobre também a zona da barra de estado: colado ao topo, nada passa por
+       cima dele ao rolar. */
+    height: calc(64px + var(--np-safe-top));
     margin-inline: calc(-1 * var(--np-x));
-    padding-inline: calc(var(--np-x) - 6px);
+    padding: var(--np-safe-top) calc(var(--np-x) - 6px) 0;
     display: grid;
     grid-template-columns: 44px minmax(0, 1fr) 44px;
     align-items: center;
@@ -4986,6 +4990,17 @@ img {
   color: #ff8f7a;
   font-size: 12px;
   line-height: 1.5;
+}
+
+/* Recuo da barra de estado no "agora tocando". Quando a página nem chega à
+   barra de estado (o Android desenha-a por fora, como nos conversores
+   site → APK), o WebView pode reportar o recuo na mesma e ficava em duplicado. */
+:root {
+  --np-safe-top: env(safe-area-inset-top, 0px);
+}
+
+.no-safe-top {
+  --np-safe-top: 0px;
 }
 
 /* ---------- Modo leve dentro do APK (WebView) ----------
