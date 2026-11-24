@@ -5091,6 +5091,10 @@ img {
 
 .no-safe-top {
   --np-safe-top: 0px;
+  /* Aqui a barra de estado do Android desenha-se acima do WebView, por isso não
+     há nada a compensar: se o recuo contasse também na página, o topo ficava
+     empurrado duas vezes e o topo da app descia demasiado. */
+  --safe-top: 0px;
 }
 
 /* ---------- Modo leve dentro do APK (WebView) ----------
