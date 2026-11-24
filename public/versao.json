@@ -1,9 +1,9 @@
 {
-  "versao": "1.2",
-  "codigo": 3,
+  "versao": "1.0.3",
+  "codigo": 6,
   "novidades": [
-    "Um só player no telemóvel: trocar de faixa já não deixa duas músicas a tocar.",
-    "Atualização pelo botão da app, sem passar pelo Chrome.",
-    "Aviso de versão nova ao abrir a app."
+    "A música continua a tocar quando sais da app, com aviso e botões.",
+    "O aviso mostra o nome, o artista, a capa e os minutos da faixa.",
+    "O botão de atualização nas Definições volta a detetar versões novas."
   ]
 }

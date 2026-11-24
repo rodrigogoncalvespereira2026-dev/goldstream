@@ -10,9 +10,9 @@ import {
   haVersaoNova,
   instalarAtualizacao,
   reloadApp,
+  versaoInstalada,
   versaoPublicada,
 } from '../lib/update'
-import { VERSAO_APP } from '../lib/versaoApp'
 import { saveAccountData, signOut, useAccount } from '../lib/account'
 import { setConsentPreferences, useConsentPreferences } from '../lib/analytics'
 import type { Navigate } from '../lib/nav'
@@ -100,11 +100,13 @@ export function Settings({ navigate }: { navigate: Navigate }) {
                   setUpdateNote('A procurar atualização…')
                   const publicada = await versaoPublicada()
                   if (!publicada) {
-                    setUpdateNote(`Sem ligação ao servidor. Está na versão ${VERSAO_APP.nome}.`)
+                    setUpdateNote(`Sem ligação ao servidor. Está na versão ${versaoInstalada().nome}.`)
                     return
                   }
                   if (!haVersaoNova(publicada)) {
-                    setUpdateNote(`Já tem a ${VERSAO_APP.nome}, que é a mais recente.`)
+                    setUpdateNote(
+                      `Já tem a ${versaoInstalada().nome}, que é a mais recente.`,
+                    )
                     return
                   }
                   setUpdateNote(`A instalar a ${publicada.versao}…`)
@@ -221,7 +223,7 @@ export function Settings({ navigate }: { navigate: Navigate }) {
               SoundHelix; as pesquisas consultam Audius e YouTube.
             </p>
             <div className="settings-tech-list">
-              <span>Versão <strong>{VERSAO_APP.nome}</strong></span>
+              <span>Versão <strong>{versaoInstalada().nome}</strong></span>
               <span>Áudio <strong>{Capacitor.isPluginAvailable('NativeAudio') ? 'Nativo' : 'Navegador'}</strong></span>
               <span>YouTube <strong>{Capacitor.isPluginAvailable('YouTubeAudio') ? 'Nativo' : 'Indisponível'}</strong></span>
               <span>Atualização <strong>{Capacitor.isPluginAvailable('AppUpdate') ? 'Nativa' : 'Indisponível'}</strong></span>

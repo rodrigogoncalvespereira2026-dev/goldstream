@@ -1,4 +1,9 @@
 {
+  "6": [
+    "A música continua a tocar quando sais da app, com aviso e botões.",
+    "O aviso mostra o nome, o artista, a capa e os minutos da faixa.",
+    "O botão de atualização nas Definições volta a detetar versões novas."
+  ],
   "3": [
     "Um só player no telemóvel: trocar de faixa já não deixa duas músicas a tocar.",
     "Atualização pelo botão da app, sem passar pelo Chrome.",

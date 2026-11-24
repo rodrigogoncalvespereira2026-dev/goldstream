@@ -1518,6 +1518,47 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     [setIntent, applyPlaybackNow, seek],
   )
 
+  // ---------- app Android (WebView): aviso da música com a faixa e botões ----------
+  // A app injeta window.GoldStreamNative. Diz-lhe o que toca (título, artista, capa)
+  // para mostrar no aviso e manter a música viva fora da app; os botões do aviso
+  // chegam como evento 'goldstream-native-control'.
+  useEffect(() => {
+    const bridge = (window as unknown as { GoldStreamNative?: { postMessage(data: string): void } })
+      .GoldStreamNative
+    if (!bridge || nativePlatform) return
+    try {
+      bridge.postMessage(
+        JSON.stringify({
+          type: 'state',
+          playing: Boolean(current) && isPlaying,
+          title: current?.title ?? '',
+          artist: current?.artist ?? '',
+          album: current?.albumTitle ?? '',
+          artwork: current ? new URL(current.cover, window.location.origin).href : '',
+        }),
+      )
+    } catch {
+      /* app sem ponte */
+    }
+  }, [current, isPlaying, nativePlatform])
+
+  const nativeControlsRef = useRef({ toggle, next, prev })
+  nativeControlsRef.current = { toggle, next, prev }
+  useEffect(() => {
+    if (nativePlatform) return
+    const onControl = (event: Event) => {
+      const action = (event as CustomEvent<string>).detail
+      const controls = nativeControlsRef.current
+      if (action === 'next') controls.next()
+      else if (action === 'prev') controls.prev()
+      else if (action === 'toggle') controls.toggle()
+      else if (action === 'play' && !intentRef.current.play) controls.toggle()
+      else if (action === 'pause' && intentRef.current.play) controls.toggle()
+    }
+    window.addEventListener('goldstream-native-control', onControl)
+    return () => window.removeEventListener('goldstream-native-control', onControl)
+  }, [nativePlatform])
+
   const timeValue = useMemo<PlayerTimeValue>(
     () => ({ currentTime, duration: effectiveDuration, seek }),
     [currentTime, effectiveDuration, seek],

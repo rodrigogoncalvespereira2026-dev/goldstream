@@ -4,7 +4,7 @@ import { VERSAO_APP } from './versaoApp'
 
 /** O site (estático) serve o APK e a versão publicada; não há servidor próprio. */
 const SITE = 'https://goldstream-uzxb.onrender.com'
-export const APK_URL = `${SITE}/goldstream.apk`
+export const APK_URL = `${SITE}/goldenstream.apk`
 export const VERSAO_URL = `${SITE}/versao.json`
 export { VERSAO_APP }
 
@@ -48,9 +48,43 @@ export async function versaoPublicada(): Promise<VersaoPublicada | null> {
   }
 }
 
+type AppNativa = {
+  nome?: string
+  codigo?: number
+  instalar?: (url: string) => boolean
+}
+
+/**
+ * A app Android injeta `window.GoldStreamApp` na página com a versão do APK instalado.
+ * No browser (e no site aberto fora da app) não existe.
+ */
+function appNativa(): AppNativa | null {
+  const global = window as unknown as { GoldStreamApp?: AppNativa }
+  const info = global.GoldStreamApp
+  if (!info || !Number.isFinite(Number(info.codigo))) return null
+  return info
+}
+
+/** Corre dentro do APK (e não apenas num browser ou no site aberto)? */
+export function isAppEmpacotada(): boolean {
+  return appNativa() !== null || Capacitor.isNativePlatform()
+}
+
+/**
+ * Versão que está mesmo instalada no telemóvel. O site publicado traria sempre a sua
+ * própria versão (a mesma que ele publica), por isso nunca detetava nada de novo.
+ */
+export function versaoInstalada(): { nome: string; codigo: number } {
+  const info = appNativa()
+  return {
+    nome: String(info?.nome || VERSAO_APP.nome),
+    codigo: Number(info?.codigo ?? VERSAO_APP.codigo),
+  }
+}
+
 /** Há versão nova quando o código publicado é maior do que o do APK instalado. */
 export function haVersaoNova(publicada: VersaoPublicada | null): publicada is VersaoPublicada {
-  return Boolean(publicada && publicada.codigo > VERSAO_APP.codigo)
+  return Boolean(publicada && publicada.codigo > versaoInstalada().codigo)
 }
 
 /**
@@ -59,6 +93,8 @@ export function haVersaoNova(publicada: VersaoPublicada | null): publicada is Ve
  */
 export async function instalarAtualizacao(): Promise<void> {
   const url = `${APK_URL}?v=${Date.now()}`
+  // Dentro do APK quem descarrega e abre o instalador é o código nativo.
+  if (appNativa()?.instalar?.(url)) return
   if (!Capacitor.isNativePlatform()) {
     window.open(url, '_blank', 'noopener')
     return

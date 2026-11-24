@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Capacitor } from '@capacitor/core'
 import {
   haVersaoNova,
   instalarAtualizacao,
+  isAppEmpacotada,
+  versaoInstalada,
   versaoPublicada,
   type VersaoPublicada,
 } from '../lib/update'
-import { VERSAO_APP } from '../lib/versaoApp'
 
 /**
  * Aviso de versão nova, só dentro do APK: o site é sempre o que está no servidor,
@@ -19,7 +19,7 @@ export function UpdateBanner() {
   const [erro, setErro] = useState('')
 
   useEffect(() => {
-    if (!Capacitor.isNativePlatform()) return
+    if (!isAppEmpacotada()) return
     let vivo = true
     void versaoPublicada().then((publicada) => {
       if (vivo && haVersaoNova(publicada)) setNova(publicada)
@@ -57,8 +57,8 @@ export function UpdateBanner() {
       <p className="update-banner-eyebrow">Versão {nova.versao} disponível</p>
       <p className="update-banner-copy">
         {nova.novidades.length > 0
-          ? `Está na ${VERSAO_APP.nome}. O que muda:`
-          : `Está na ${VERSAO_APP.nome}.`}
+          ? `Está na ${versaoInstalada().nome}. O que muda:`
+          : `Está na ${versaoInstalada().nome}.`}
       </p>
       {nova.novidades.length > 0 && (
         <ul className="update-banner-list">
