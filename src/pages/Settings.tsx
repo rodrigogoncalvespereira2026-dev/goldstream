@@ -104,13 +104,14 @@ export function Settings({ navigate }: { navigate: Navigate }) {
                     setUpdateNote(`Sem ligação ao servidor. Está na versão ${versaoInstalada().nome}.`)
                     return
                   }
+                  const versaoServidor = publicada.versao
                   if (!haVersaoNova(publicada)) {
                     // Sem a ponte nativa (APK antigo) não se sabe a versão instalada:
                     // dizer "já tem a mais recente" seria mentira.
                     setUpdateNote(
                       versaoConhecida()
                         ? `Já tem a ${versaoInstalada().nome}, que é a mais recente.`
-                        : `Não consigo confirmar a versão instalada neste aparelho. A mais recente é a ${publicada.versao} — usa "Baixar o APK" para a instalar.`,
+                        : `Não consigo confirmar a versão instalada neste aparelho. A mais recente é a ${versaoServidor} — usa "Baixar o APK" para a instalar.`,
                     )
                     return
                   }
