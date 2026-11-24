@@ -266,6 +266,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const endedRef = useRef<() => void>(() => {})
   /** O que o utilizador pediu (tocar/parar). Os eventos do motor não contrariam isto. */
   const intentRef = useRef({ play: false, at: 0 })
+  /**
+   * Pausa que a própria app pediu (trocar de faixa, "tocar" desligado). As
+   * pausas que não vêm daqui são do sistema/notificação e contam como pedido do
+   * utilizador — antes eram ignoradas e a música voltava sozinha.
+   */
+  const selfPauseRef = useRef(false)
   /** Última prova de vida do player nativo (posição a avançar). */
   const lastTickRef = useRef(0)
   /** Último instante em que a barra de progresso foi atualizada. */
@@ -331,7 +337,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       const audio = audioRef.current
       if (audio) {
         if (play) void audio.play().catch(() => {})
-        else audio.pause()
+        else {
+          selfPauseRef.current = true
+          audio.pause()
+        }
       }
       try {
         if (play) ytPlayerRef.current?.playVideo?.()
@@ -442,9 +451,16 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     }
     const onPause = () => {
       if (usesIframeRef.current) return
-      // A pausa que o próprio elemento dispara ao trocar de src não pode anular a
-      // intenção do utilizador (era isto que impedia a música de começar/trocar).
-      if (intentRef.current.play) return
+      // A pausa que a própria app pede (trocar de faixa, desligar o som) não pode
+      // anular a intenção do utilizador.
+      if (selfPauseRef.current) {
+        selfPauseRef.current = false
+        return
+      }
+      // Pausa de fora: barra de notificação, auscultadores, outra app. É o
+      // utilizador que a pediu, por isso o estado tem de a seguir — antes ficava
+      // a "tocar" e o efeito seguinte voltava a dar play uns segundos depois.
+      if (intentRef.current.play) setIntent(false)
       setIsPlaying(false)
     }
     const onVolume = () => setMuted(audio.muted)
@@ -852,6 +868,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     if (!audio) return
     const src = current ? ytAudioSrc ?? current.src : ''
     if (!current || usesIframe || !src) {
+      selfPauseRef.current = true
       audio.pause()
       audio.removeAttribute('src')
       loadedIdRef.current = null
@@ -860,13 +877,18 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     if (loadedIdRef.current !== current.id) {
       loadedIdRef.current = current.id
       setPlayerNotice(null)
+      selfPauseRef.current = true
       audio.src = src
       setCurrentTime(0)
       setDuration(durations[current.id] ?? current.duration ?? 0)
     }
     if (isPlaying) {
-      void audio.play().catch(() => setIsPlaying(false))
-    } else {
+      // Só arranca se estiver parado: um simples re-render (as durações a
+      // chegarem, por exemplo) não pode dar play a uma música que o utilizador
+      // pôs em pausa pela notificação.
+      if (audio.paused) void audio.play().catch(() => setIsPlaying(false))
+    } else if (!audio.paused) {
+      selfPauseRef.current = true
       audio.pause()
     }
   }, [
@@ -1355,6 +1377,59 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     }
     step(-1)
   }, [seek, step])
+
+  const nextRef = useRef<() => void>(() => {})
+  const prevRef = useRef<() => void>(() => {})
+  const seekRef = useRef<(seconds: number) => void>(() => {})
+  nextRef.current = next
+  prevRef.current = prev
+  seekRef.current = seek
+
+  // ---------- botões da notificação do Android (Media Session) ----------
+  // A barra de notificação fala com a Media Session do WebView. Sem handlers, o
+  // pause de lá mudava a barra mas não chegava ao JavaScript. Aqui os botões
+  // passam a mexer no nosso estado, o mesmo que os botões da app.
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return
+    const session = navigator.mediaSession as unknown as {
+      setActionHandler: (
+        action: string,
+        handler: ((details: { seekTime?: number | null }) => void) | null,
+      ) => void
+    }
+    const bind = (
+      action: string,
+      handler: ((details: { seekTime?: number | null }) => void) | null,
+    ) => {
+      try {
+        session.setActionHandler(action, handler)
+      } catch {
+        /* ação não suportada neste WebView */
+      }
+    }
+    bind('play', () => {
+      setIntent(true)
+      applyPlaybackNow(true)
+    })
+    bind('pause', () => {
+      setIntent(false)
+      applyPlaybackNow(false)
+    })
+    bind('stop', () => {
+      setIntent(false)
+      applyPlaybackNow(false)
+    })
+    bind('nexttrack', () => nextRef.current())
+    bind('previoustrack', () => prevRef.current())
+    bind('seekto', (details) => {
+      if (typeof details.seekTime === 'number') seekRef.current(details.seekTime)
+    })
+    return () => {
+      ;['play', 'pause', 'stop', 'nexttrack', 'previoustrack', 'seekto'].forEach((action) =>
+        bind(action, null),
+      )
+    }
+  }, [applyPlaybackNow, setIntent])
 
   const changeVolume = useCallback((value: number) => {
     const clamped = Math.min(1, Math.max(0, value))
