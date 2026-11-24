@@ -14,6 +14,13 @@ export type BackgroundId =
   | 'galaxy'
   | 'matrix'
   | 'bokeh'
+  | 'mint'
+  | 'dusk'
+  | 'desert'
+  | 'ice'
+  | 'sakura'
+  | 'rain'
+  | 'gold'
 
 export type Background = { id: BackgroundId; name: string; note: string }
 
@@ -31,6 +38,13 @@ export const BACKGROUNDS: Background[] = [
   { id: 'galaxy', name: 'Galáxia', note: 'Nebulosa roxa com estrelas' },
   { id: 'matrix', name: 'Código', note: 'Chuva verde a descer' },
   { id: 'bokeh', name: 'Bokeh', note: 'Luzes soltas a flutuar' },
+  { id: 'mint', name: 'Menta', note: 'Verde-água fresco e calmo' },
+  { id: 'dusk', name: 'Crepúsculo', note: 'Roxo a virar laranja' },
+  { id: 'desert', name: 'Deserto', note: 'Terracota com sol baixo' },
+  { id: 'ice', name: 'Gelo', note: 'Azuis frios e vidro fosco' },
+  { id: 'sakura', name: 'Cerejeira', note: 'Pétalas cor-de-rosa a cair' },
+  { id: 'rain', name: 'Chuva', note: 'Riscos finos a descer' },
+  { id: 'gold', name: 'Ouro', note: 'Dourado com brilho a passar' },
 ]
 
 const KEY = 'sonora:background'

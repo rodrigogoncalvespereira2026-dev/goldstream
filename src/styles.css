@@ -3722,7 +3722,8 @@ img {
 
 @media (prefers-reduced-motion: reduce) {
   .bg-blob,
-  .bg-shine {
+  .bg-shine,
+  .bg-scene::before {
     animation: none !important;
   }
 }
@@ -3896,6 +3897,231 @@ img {
   left: 60%;
   background: #fbbf24;
   opacity: 0.4;
+}
+
+/* ---------------- Fundos animados (mais sete) ---------------- */
+
+@keyframes bg-petals {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(70px, 380px, 0);
+  }
+}
+
+@keyframes bg-rain {
+  from {
+    transform: skewX(-8deg) translate3d(0, 0, 0);
+  }
+  to {
+    transform: skewX(-8deg) translate3d(0, 92px, 0);
+  }
+}
+
+@keyframes bg-sweep {
+  from {
+    transform: translate3d(-28%, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(28%, 0, 0);
+  }
+}
+
+/* Menta */
+.bg-mint {
+  background: radial-gradient(circle at 30% 6%, #0b2c28, #04090a 74%);
+}
+.bg-mint .bg-blob.a {
+  top: -30%;
+  left: -16%;
+  background: #2dd4bf;
+  opacity: 0.42;
+}
+.bg-mint .bg-blob.b {
+  right: -26%;
+  bottom: -36%;
+  background: #34d399;
+  opacity: 0.36;
+}
+.bg-mint .bg-blob.c {
+  top: 28%;
+  left: 38%;
+  background: #a7f3d0;
+  opacity: 0.22;
+}
+
+/* Crepúsculo */
+.bg-dusk {
+  background: linear-gradient(180deg, #1b1140 0%, #3a1546 46%, #6b2136 78%, #0a0512 100%);
+}
+.bg-dusk .bg-blob.a {
+  top: -30%;
+  left: -14%;
+  background: #7c3aed;
+  opacity: 0.42;
+}
+.bg-dusk .bg-blob.b {
+  right: -24%;
+  bottom: -34%;
+  background: #f97316;
+  opacity: 0.38;
+}
+.bg-dusk .bg-blob.c {
+  top: 36%;
+  left: 44%;
+  background: #fb7185;
+  opacity: 0.3;
+}
+
+/* Deserto: o "sol" baixo é um degradê próprio do fundo, sem camada a mais. */
+.bg-desert {
+  background:
+    radial-gradient(circle at 50% 104%, rgba(255, 172, 92, 0.45), transparent 58%),
+    radial-gradient(circle at 42% 4%, #1c1009, #080505 72%);
+}
+.bg-desert .bg-blob.a {
+  top: -28%;
+  left: -18%;
+  background: #c2410c;
+  opacity: 0.36;
+}
+.bg-desert .bg-blob.b {
+  right: -22%;
+  bottom: -32%;
+  background: #d97706;
+  opacity: 0.34;
+}
+.bg-desert .bg-blob.c {
+  top: 22%;
+  left: 48%;
+  background: #fcd34d;
+  opacity: 0.2;
+}
+
+/* Gelo: riscos de vidro fosco fixos no próprio fundo (baratos de desenhar). */
+.bg-ice {
+  background:
+    repeating-linear-gradient(112deg, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 64px),
+    radial-gradient(circle at 62% 10%, #0e2a3f, #04070c 72%);
+}
+.bg-ice .bg-blob.a {
+  top: -32%;
+  right: -18%;
+  background: #38bdf8;
+  opacity: 0.38;
+}
+.bg-ice .bg-blob.b {
+  bottom: -36%;
+  left: -20%;
+  background: #818cf8;
+  opacity: 0.32;
+}
+.bg-ice .bg-blob.c {
+  top: 30%;
+  left: 34%;
+  background: #e0f2fe;
+  opacity: 0.2;
+}
+
+/* Cerejeira: pétalas numa camada que só se desloca (a GPU compõe, não repinta). */
+.bg-sakura {
+  background: radial-gradient(circle at 40% 6%, #2b1020, #0a0509 74%);
+}
+.bg-sakura .bg-blob.a {
+  top: -28%;
+  left: -16%;
+  background: #f472b6;
+  opacity: 0.38;
+}
+.bg-sakura .bg-blob.b {
+  right: -22%;
+  bottom: -34%;
+  background: #c084fc;
+  opacity: 0.3;
+}
+.bg-sakura .bg-blob.c {
+  top: 30%;
+  left: 40%;
+  background: #fda4af;
+  opacity: 0.22;
+}
+.bg-sakura::before {
+  content: '';
+  position: absolute;
+  inset: -25% 0;
+  background-image:
+    radial-gradient(3px 5px at 40px 60px, rgba(255, 186, 208, 0.85), transparent 70%),
+    radial-gradient(2px 4px at 170px 150px, rgba(255, 214, 228, 0.75), transparent 70%),
+    radial-gradient(3px 6px at 100px 260px, rgba(255, 168, 196, 0.8), transparent 70%),
+    radial-gradient(2px 4px at 230px 330px, rgba(255, 226, 236, 0.7), transparent 70%);
+  background-size: 270px 380px;
+  opacity: 0.75;
+  will-change: transform;
+  animation: bg-petals 34s linear infinite;
+}
+
+/* Chuva: riscos finos na diagonal, a descer em ciclo contínuo. */
+.bg-rain {
+  background: linear-gradient(180deg, #071019 0%, #03060a 72%);
+}
+.bg-rain .bg-blob {
+  display: none;
+}
+.bg-rain::before {
+  content: '';
+  position: absolute;
+  inset: -30% 0;
+  background-image: repeating-linear-gradient(
+    180deg,
+    rgba(150, 200, 255, 0.5) 0 20px,
+    transparent 20px 92px
+  );
+  background-size: 28px 92px;
+  opacity: 0.32;
+  will-change: transform;
+  animation: bg-rain 1.1s linear infinite;
+}
+
+/* Ouro */
+.bg-gold {
+  background:
+    radial-gradient(circle at 50% 16%, rgba(255, 206, 120, 0.16), transparent 60%),
+    linear-gradient(180deg, #241a09 0%, #0a0705 74%);
+}
+.bg-gold .bg-blob.a {
+  top: -28%;
+  left: -14%;
+  background: #f59e0b;
+  opacity: 0.4;
+}
+.bg-gold .bg-blob.b {
+  right: -24%;
+  bottom: -32%;
+  background: #b45309;
+  opacity: 0.36;
+}
+.bg-gold .bg-blob.c {
+  top: 30%;
+  left: 36%;
+  background: #fde68a;
+  opacity: 0.24;
+}
+.bg-gold::before {
+  content: '';
+  position: absolute;
+  inset: -30%;
+  background: linear-gradient(
+    105deg,
+    transparent 40%,
+    rgba(255, 226, 160, 0.22) 50%,
+    transparent 60%
+  );
+  will-change: transform;
+  animation: bg-sweep 11s ease-in-out infinite;
 }
 
 /* ---------------- Conta ---------------- */
