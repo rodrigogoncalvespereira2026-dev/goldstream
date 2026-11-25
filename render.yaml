@@ -4,3 +4,18 @@ services:
     runtime: static
     buildCommand: npm ci && npm run build
     staticPublishPath: ./dist
+
+  - type: web
+    name: goldenstream-api
+    runtime: node
+    plan: free
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: MONGODB_URI
+        sync: false
+      - key: ADMIN_EMAIL
+        value: rgp200903@gmail.com
+      - key: ORIGENS
+        value: https://goldstream-uzxb.onrender.com

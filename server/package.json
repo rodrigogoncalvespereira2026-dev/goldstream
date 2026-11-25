@@ -1,0 +1,13 @@
+{
+  "name": "goldenstream-api",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "scripts": {
+    "start": "node index.mjs",
+    "test-ligacao": "node --env-file=.env test-connection.mjs"
+  },
+  "dependencies": {
+    "mongodb": "^6.10.0"
+  }
+}
