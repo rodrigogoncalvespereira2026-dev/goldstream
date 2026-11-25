@@ -7,7 +7,6 @@ export type Account = {
   email: string
 }
 
-/** Conta como a API a devolve. */
 type ContaApi = {
   id: string
   nome: string
@@ -39,30 +38,37 @@ const DATA_KEYS = [
 ]
 
 const CONTA = 'sonora:conta'
+/** Marca de qual conta são os dados que estão neste telemóvel. */
+const DONO = 'sonora:dadosDe'
+
+const ler = (chave: string): string | null => {
+  try {
+    return localStorage.getItem(chave)
+  } catch {
+    return null
+  }
+}
+
+const gravar = (chave: string, valor: string | null): void => {
+  try {
+    if (valor === null) localStorage.removeItem(chave)
+    else localStorage.setItem(chave, valor)
+  } catch {
+    /* ignora */
+  }
+}
 
 const snapshot = (): Record<string, string | null> => {
   const data: Record<string, string | null> = {}
   DATA_KEYS.forEach((key) => {
-    try {
-      data[key] = localStorage.getItem(key)
-    } catch {
-      data[key] = null
-    }
+    data[key] = ler(key)
   })
   return data
 }
 
-const hydrate = (data: Record<string, string | null>): void => {
-  DATA_KEYS.forEach((key) => {
-    try {
-      const value = data[key]
-      if (typeof value === 'string') localStorage.setItem(key, value)
-      else localStorage.removeItem(key)
-    } catch {
-      /* ignora */
-    }
-  })
-}
+/** Vazio para efeitos de sincronização: sem valor, lista vazia ou objeto vazio. */
+const vazio = (valor: string | null | undefined): boolean =>
+  !valor || valor === '[]' || valor === '{}'
 
 const paraConta = (conta: ContaApi): Account => ({
   id: conta.id,
@@ -71,28 +77,19 @@ const paraConta = (conta: ContaApi): Account => ({
 })
 
 const lerContaGuardada = (): Account | null => {
+  const raw = ler(CONTA)
+  if (!raw) return null
   try {
-    const raw = localStorage.getItem(CONTA)
-    if (!raw) return null
     const parsed = JSON.parse(raw) as Partial<Account>
     if (!parsed?.id || !parsed?.email) return null
-    return {
-      id: String(parsed.id),
-      name: String(parsed.name ?? ''),
-      email: String(parsed.email),
-    }
+    return { id: String(parsed.id), name: String(parsed.name ?? ''), email: String(parsed.email) }
   } catch {
     return null
   }
 }
 
 const guardarConta = (conta: Account | null): void => {
-  try {
-    if (conta) localStorage.setItem(CONTA, JSON.stringify(conta))
-    else localStorage.removeItem(CONTA)
-  } catch {
-    /* ignora */
-  }
+  gravar(CONTA, conta ? JSON.stringify(conta) : null)
 }
 
 const listeners = new Set<() => void>()
@@ -121,25 +118,53 @@ export const useAccount = (): Account | null => {
 }
 
 /**
- * Envia o estado atual do app para a conta no servidor. É chamado ao sair, ao
- * esconder a app e de minuto a minuto; falhar não deve quebrar a experiência,
- * por isso o erro é ignorado (a próxima gravação volta a tentar).
+ * Copia os dados da conta para o telemóvel. Nunca apaga o que só existe aqui:
+ * se o servidor não tiver um campo e o aparelho tiver, fica o do aparelho (e é
+ * enviado). Devolve `true` quando há dados locais por enviar.
  */
-export const saveAccountData = (): void => {
+const hidratar = (dados: Record<string, string | null>, contaId: string): boolean => {
+  const dono = ler(DONO)
+  const mesmoDono = dono === contaId
+  // Sem marca (primeira entrada depois da atualização) aceita-se o local; com
+  // marca de outra conta, manda o servidor, para não misturar contas.
+  const aceitaLocal = mesmoDono || dono === null
+  let porEnviar = false
+
+  DATA_KEYS.forEach((key) => {
+    const doServidor = dados[key] ?? null
+    const local = ler(key)
+    let escolhido = doServidor
+    if (aceitaLocal && vazio(doServidor) && !vazio(local)) {
+      escolhido = local
+      porEnviar = true
+    }
+    gravar(key, escolhido && escolhido.length ? escolhido : null)
+  })
+
+  gravar(DONO, contaId)
+  return porEnviar
+}
+
+/** Envia o estado atual do app para a conta no servidor. */
+export async function enviarDados(): Promise<void> {
   const token = lerToken()
   if (!token || !cached) return
-  void pedir('/api/dados', {
+  await pedir('/api/dados', {
     metodo: 'PUT',
     token,
     manter: true,
     corpo: { dados: snapshot() },
-  }).catch(() => {})
+  })
+}
+
+/** Versão que não espera (usada ao esconder/fechar a app). */
+export const saveAccountData = (): void => {
+  void enviarDados().catch(() => {})
 }
 
 /**
- * Retoma a sessão guardada: confirma o token no servidor e traz os dados da
- * conta antes de a app desenhar o primeiro ecrã. Sem rede, a app abre com o
- * que está no telemóvel e tenta de novo na próxima abertura.
+ * Retoma a sessão guardada antes do primeiro ecrã. Sem rede, a app abre com o
+ * que está no telemóvel e volta a tentar na próxima abertura.
  */
 export async function restaurarSessao(): Promise<void> {
   const token = lerToken()
@@ -153,9 +178,10 @@ export async function restaurarSessao(): Promise<void> {
   if (!cached) return
   try {
     const resposta = await pedir<RespostaEu>('/api/auth/eu', { token })
-    hydrate(resposta.dados ?? {})
+    const porEnviar = hidratar(resposta.dados ?? {}, resposta.conta.id)
     guardarConta(paraConta(resposta.conta))
     emit()
+    if (porEnviar) await enviarDados().catch(() => {})
   } catch (falha) {
     if (falha instanceof ErroApi && falha.estado === 401) {
       guardarToken(null)
@@ -170,8 +196,8 @@ export async function signUp(input: {
   email: string
   password: string
 }): Promise<Account> {
-  // O primeiro registo leva o que já está neste telemóvel (playlists, gostos,
-  // estatísticas). Contas seguintes no mesmo aparelho começam limpas.
+  // O primeiro registo leva o que já está neste telemóvel. Uma segunda conta no
+  // mesmo aparelho começa limpa.
   const jaTinhaConta = Boolean(cached)
   const dados = jaTinhaConta ? {} : snapshot()
   const resposta = await pedir<RespostaConta>('/api/auth/registar', {
@@ -180,7 +206,7 @@ export async function signUp(input: {
   })
   guardarToken(resposta.token)
   guardarConta(paraConta(resposta.conta))
-  if (jaTinhaConta) hydrate({})
+  hidratar(jaTinhaConta ? {} : dados, resposta.conta.id)
   emit()
   return cached ?? paraConta(resposta.conta)
 }
@@ -192,18 +218,45 @@ export async function signIn(input: { email: string; password: string }): Promis
   })
   guardarToken(resposta.token)
   guardarConta(paraConta(resposta.conta))
-  if (resposta.dados) hydrate(resposta.dados)
+  const porEnviar = hidratar(resposta.dados ?? {}, resposta.conta.id)
   emit()
+  // O que só existia no telemóvel sobe agora para a conta.
+  if (porEnviar) await enviarDados().catch(() => {})
   return cached ?? paraConta(resposta.conta)
 }
 
-export function signOut(): void {
-  saveAccountData()
+/** Grava tudo no servidor **antes** de fechar a sessão (senão ficava só local). */
+export async function signOut(): Promise<void> {
+  await enviarDados().catch(() => {})
   const token = lerToken()
-  if (token) {
-    void pedir('/api/auth/sair', { metodo: 'POST', token }).catch(() => {})
-  }
+  if (token) await pedir('/api/auth/sair', { metodo: 'POST', token }).catch(() => {})
   guardarToken(null)
   guardarConta(null)
   emit()
+}
+
+/**
+ * Sincronização automática: assim que os dados mudam (playlists, gostos,
+ * estatísticas, perfil, fundo) vão para a base de dados, sem esperar que a
+ * pessoa saia da app.
+ */
+const EVENTOS = ['sonora:mine', 'sonora:stats', 'sonora:profile', 'sonora:background', 'sonora:hidden']
+
+if (typeof window !== 'undefined') {
+  let timer: number | null = null
+  const agendar = () => {
+    if (!lerToken() || !cached) return
+    if (timer !== null) return
+    timer = window.setTimeout(() => {
+      timer = null
+      saveAccountData()
+    }, 1200)
+  }
+
+  EVENTOS.forEach((nome) => window.addEventListener(nome, agendar))
+  window.addEventListener('pagehide', agendar)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') agendar()
+  })
+  window.setInterval(agendar, 20000)
 }

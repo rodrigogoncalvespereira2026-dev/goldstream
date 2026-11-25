@@ -14,7 +14,7 @@ import {
   versaoInstalada,
   versaoPublicada,
 } from '../lib/update'
-import { saveAccountData, signOut, useAccount } from '../lib/account'
+import { signOut, useAccount } from '../lib/account'
 import { ADMIN_EMAIL, isAdmin } from '../lib/admin'
 import { setConsentPreferences, useConsentPreferences } from '../lib/analytics'
 import type { Navigate } from '../lib/nav'
@@ -49,9 +49,10 @@ export function Settings({ navigate }: { navigate: Navigate }) {
               <button
                 type="button"
                 className="ghost-button settings-action"
-                onClick={() => {
-                  saveAccountData()
-                  signOut()
+                onClick={async () => {
+                  // Espera pela gravação: sair apaga o token no servidor, e um
+                  // envio a seguir já chegaria sem sessão.
+                  await signOut()
                   window.location.reload()
                 }}
               >
