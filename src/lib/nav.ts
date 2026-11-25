@@ -3,6 +3,7 @@ export type View =
   | { type: 'search'; query?: string }
   | { type: 'library' }
   | { type: 'settings' }
+  | { type: 'admin' }
   | { type: 'profile' }
   | { type: 'backgrounds' }
   | { type: 'colors' }

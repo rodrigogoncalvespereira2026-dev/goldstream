@@ -207,6 +207,25 @@ export function signOut(): void {
   emit()
 }
 
+export type AccountSummary = {
+  id: string
+  name: string
+  email: string
+  createdAt: number
+  data: Record<string, string | null>
+}
+
+/** Contas guardadas neste aparelho, sem salts nem hashes. */
+export function listAccounts(): AccountSummary[] {
+  return readAccounts().map((item) => ({
+    id: item.id,
+    name: item.name,
+    email: item.email,
+    createdAt: Number(item.createdAt) || 0,
+    data: item.data && typeof item.data === 'object' ? item.data : {},
+  }))
+}
+
 export function hasAccounts(): boolean {
   return readAccounts().length > 0
 }

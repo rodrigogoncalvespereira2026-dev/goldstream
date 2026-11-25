@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { Section } from '../components/Cards'
-import { DownloadIcon, RefreshIcon, SparkleIcon } from '../components/Icons'
+import { DownloadIcon, RefreshIcon, SparkleIcon, UserIcon } from '../components/Icons'
 import { NativeDebugLog } from '../components/NativeDebugLog'
 import { YouTubeLink } from '../components/YouTubeLink'
 import { BACKGROUNDS, useBackground } from '../lib/backgrounds'
@@ -15,6 +15,7 @@ import {
   versaoPublicada,
 } from '../lib/update'
 import { saveAccountData, signOut, useAccount } from '../lib/account'
+import { ADMIN_EMAIL, isAdmin } from '../lib/admin'
 import { setConsentPreferences, useConsentPreferences } from '../lib/analytics'
 import type { Navigate } from '../lib/nav'
 
@@ -60,6 +61,25 @@ export function Settings({ navigate }: { navigate: Navigate }) {
           </Section>
         </div>
 
+        {isAdmin(account) && (
+          <div className="settings-card">
+            <Section title="Administração" note="Acesso restrito">
+              <p className="settings-note">
+                Números da app, só para a conta {ADMIN_EMAIL}.
+              </p>
+              <div className="settings-actions">
+                <button
+                  type="button"
+                  className="connect-button settings-action"
+                  onClick={() => navigate({ type: 'admin' })}
+                >
+                  <UserIcon size={18} />
+                  Abrir painel admin
+                </button>
+              </div>
+            </Section>
+          </div>
+        )}
         <div className="settings-card">
           <Section title="Aparência" note="Personalização">
             <p className="settings-note">

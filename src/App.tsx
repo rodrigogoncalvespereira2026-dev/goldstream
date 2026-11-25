@@ -18,6 +18,7 @@ import { useBackground } from './lib/backgrounds'
 import { applyAccent, useAccent } from './lib/theme'
 import { Collection } from './pages/Collection'
 import { Auth } from './pages/Auth'
+import { Admin } from './pages/Admin'
 import { saveAccountData, useAccount } from './lib/account'
 import { PlayerProvider, usePlayer } from './lib/player'
 import {
@@ -143,6 +144,8 @@ function Shell() {
         return <Library navigate={navigate} />
       case 'settings':
         return <Settings navigate={navigate} />
+      case 'admin':
+        return <Admin navigate={navigate} />
       case 'profile':
         return <Profile navigate={navigate} />
       case 'backgrounds':
