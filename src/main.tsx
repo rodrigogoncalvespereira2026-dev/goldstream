@@ -5,6 +5,7 @@ import { isWebView } from './lib/platform'
 import App from './App'
 import './styles.css'
 import { applyAccent, readAccent } from './lib/theme'
+import { restaurarSessao } from './lib/account'
 
 // A cor do tema entra antes do primeiro desenho.
 applyAccent(readAccent())
@@ -22,11 +23,19 @@ if (isWebView && !Capacitor.isNativePlatform()) {
   document.documentElement.classList.add('no-safe-top')
 }
 
-const container = document.getElementById('root')
-if (!container) throw new Error('Elemento #root não encontrado')
+const encontrado = document.getElementById('root')
+if (!encontrado) throw new Error('Elemento #root não encontrado')
+const container: HTMLElement = encontrado
 
-createRoot(container).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-)
+function arrancar() {
+  createRoot(container).render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  )
+}
+
+// A sessão é confirmada no servidor (e os dados da conta carregados) antes do
+// primeiro desenho, senão a app abria com os dados de outra conta durante um
+// instante. Sem rede, abre com o que está guardado no telemóvel.
+void restaurarSessao().finally(arrancar)

@@ -42,7 +42,7 @@ export function Settings({ navigate }: { navigate: Navigate }) {
           <Section title="Conta" note={account?.email ?? 'Sessão aberta'}>
             <p className="settings-note">
               {account
-                ? `Olá, ${account.name}. Os teus gostos, playlists e preferências ficam guardados neste dispositivo.`
+                ? `Olá, ${account.name}. Os teus gostos, playlists e preferências ficam na tua conta, guardada na base de dados da goldenstream.`
                 : 'Sem sessão aberta.'}
             </p>
             <div className="settings-actions">

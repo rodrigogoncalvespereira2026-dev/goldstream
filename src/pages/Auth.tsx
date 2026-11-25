@@ -1,9 +1,9 @@
 import { useState, type FormEvent } from 'react'
-import { hasAccounts, signIn, signUp } from '../lib/account'
+import { signIn, signUp } from '../lib/account'
 import { LogoMark } from '../components/Icons'
 
 export function Auth() {
-  const [mode, setMode] = useState<'in' | 'up'>(() => (hasAccounts() ? 'in' : 'up'))
+  const [mode, setMode] = useState<'in' | 'up'>('up')
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -44,7 +44,7 @@ export function Auth() {
         </h1>
         <p className="auth-note">
           {mode === 'up'
-            ? 'Assim as tuas músicas, gostos e estatísticas ficam guardados contigo neste telemóvel.'
+            ? 'Assim as tuas músicas, gostos e estatísticas ficam na tua conta — e abrem em qualquer telemóvel.'
             : 'Usa o email e a palavra-passe com que criaste a conta.'}
         </p>
 
@@ -110,8 +110,7 @@ export function Auth() {
         </button>
 
         <p className="auth-foot">
-          A conta e os dados ficam guardados neste telemóvel. Para sincronizar entre aparelhos é
-          preciso ligar um serviço na nuvem.
+          A conta fica guardada no servidor da goldenstream. Os dados locais do telemóvel são copiados para ela no primeiro registo.
         </p>
       </form>
     </div>

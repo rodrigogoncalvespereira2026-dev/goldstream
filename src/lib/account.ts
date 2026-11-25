@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ErroApi, guardarToken, lerToken, pedir } from './api'
 
 export type Account = {
   id: string
@@ -6,12 +7,22 @@ export type Account = {
   email: string
 }
 
-type StoredAccount = Account & {
-  salt: string
-  hash: string
-  /** Dados da app pertencentes a esta conta (copiados do storage ao sair). */
-  data: Record<string, string | null>
-  createdAt: number
+/** Conta como a API a devolve. */
+type ContaApi = {
+  id: string
+  nome: string
+  email: string
+}
+
+type RespostaConta = {
+  token: string
+  conta: ContaApi
+  dados?: Record<string, string | null>
+}
+
+type RespostaEu = {
+  conta: ContaApi
+  dados: Record<string, string | null>
 }
 
 /** Chaves do app que pertencem à conta. */
@@ -24,28 +35,10 @@ const DATA_KEYS = [
   'sonora:stats',
   'sonora:background',
   'sonora:player',
+  'sonora:mine',
 ]
 
-const ACCOUNTS = 'sonora:accounts'
-const SESSION = 'sonora:session'
-
-const readAccounts = (): StoredAccount[] => {
-  try {
-    const raw = localStorage.getItem(ACCOUNTS)
-    const parsed = raw ? (JSON.parse(raw) as unknown) : []
-    return Array.isArray(parsed) ? (parsed as StoredAccount[]) : []
-  } catch {
-    return []
-  }
-}
-
-const writeAccounts = (accounts: StoredAccount[]): void => {
-  try {
-    localStorage.setItem(ACCOUNTS, JSON.stringify(accounts))
-  } catch {
-    /* storage indisponível */
-  }
-}
+const CONTA = 'sonora:conta'
 
 const snapshot = (): Record<string, string | null> => {
   const data: Record<string, string | null> = {}
@@ -71,41 +64,42 @@ const hydrate = (data: Record<string, string | null>): void => {
   })
 }
 
-const toPublic = (account: StoredAccount): Account => ({
-  id: account.id,
-  name: account.name,
-  email: account.email,
+const paraConta = (conta: ContaApi): Account => ({
+  id: conta.id,
+  name: conta.nome,
+  email: conta.email,
 })
 
-const hashPassword = async (password: string, salt: string): Promise<string> => {
-  const bytes = new TextEncoder().encode(`${salt}:${password}`)
-  const digest = await crypto.subtle.digest('SHA-256', bytes)
-  return Array.from(new Uint8Array(digest))
-    .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join('')
-}
-
-const newSalt = (): string =>
-  Array.from(crypto.getRandomValues(new Uint8Array(12)))
-    .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join('')
-
-const readSession = (): Account | null => {
+const lerContaGuardada = (): Account | null => {
   try {
-    const id = localStorage.getItem(SESSION)
-    if (!id) return null
-    const account = readAccounts().find((item) => item.id === id)
-    return account ? toPublic(account) : null
+    const raw = localStorage.getItem(CONTA)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<Account>
+    if (!parsed?.id || !parsed?.email) return null
+    return {
+      id: String(parsed.id),
+      name: String(parsed.name ?? ''),
+      email: String(parsed.email),
+    }
   } catch {
     return null
   }
 }
 
+const guardarConta = (conta: Account | null): void => {
+  try {
+    if (conta) localStorage.setItem(CONTA, JSON.stringify(conta))
+    else localStorage.removeItem(CONTA)
+  } catch {
+    /* ignora */
+  }
+}
+
 const listeners = new Set<() => void>()
-let cached = readSession()
+let cached = lerContaGuardada()
 
 const emit = (): void => {
-  cached = readSession()
+  cached = lerContaGuardada()
   listeners.forEach((listener) => listener())
 }
 
@@ -126,106 +120,90 @@ export const useAccount = (): Account | null => {
   return account
 }
 
-/** Guarda o estado atual do app dentro da conta aberta. */
+/**
+ * Envia o estado atual do app para a conta no servidor. É chamado ao sair, ao
+ * esconder a app e de minuto a minuto; falhar não deve quebrar a experiência,
+ * por isso o erro é ignorado (a próxima gravação volta a tentar).
+ */
 export const saveAccountData = (): void => {
-  const account = readSession()
-  if (!account) return
-  const accounts = readAccounts()
-  const index = accounts.findIndex((item) => item.id === account.id)
-  if (index < 0) return
-  accounts[index] = { ...accounts[index], data: snapshot() }
-  writeAccounts(accounts)
+  const token = lerToken()
+  if (!token || !cached) return
+  void pedir('/api/dados', {
+    metodo: 'PUT',
+    token,
+    manter: true,
+    corpo: { dados: snapshot() },
+  }).catch(() => {})
 }
 
-const normalizeEmail = (value: string) => value.trim().toLowerCase()
-
-const fail = (message: string): Error => new Error(message)
+/**
+ * Retoma a sessão guardada: confirma o token no servidor e traz os dados da
+ * conta antes de a app desenhar o primeiro ecrã. Sem rede, a app abre com o
+ * que está no telemóvel e tenta de novo na próxima abertura.
+ */
+export async function restaurarSessao(): Promise<void> {
+  const token = lerToken()
+  if (!token) {
+    if (cached) {
+      guardarConta(null)
+      cached = null
+    }
+    return
+  }
+  if (!cached) return
+  try {
+    const resposta = await pedir<RespostaEu>('/api/auth/eu', { token })
+    hydrate(resposta.dados ?? {})
+    guardarConta(paraConta(resposta.conta))
+    emit()
+  } catch (falha) {
+    if (falha instanceof ErroApi && falha.estado === 401) {
+      guardarToken(null)
+      guardarConta(null)
+      emit()
+    }
+  }
+}
 
 export async function signUp(input: {
   name: string
   email: string
   password: string
 }): Promise<Account> {
-  const name = input.name.trim()
-  const email = normalizeEmail(input.email)
-  const password = input.password
-
-  if (name.length < 2) throw fail('Escreve o teu nome.')
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw fail('Esse email não parece válido.')
-  if (password.length < 6) throw fail('A palavra-passe precisa de 6 caracteres ou mais.')
-
-  const accounts = readAccounts()
-  if (accounts.some((item) => item.email === email)) {
-    throw fail('Já existe uma conta com este email. Entra nela.')
-  }
-
-  const salt = newSalt()
-  const hash = await hashPassword(password, salt)
-  const account: StoredAccount = {
-    id: `acc_${Date.now().toString(36)}_${newSalt().slice(0, 6)}`,
-    name,
-    email,
-    salt,
-    hash,
-    // A primeira conta fica com o que já está neste telemóvel.
-    data: accounts.length ? {} : snapshot(),
-    createdAt: Date.now(),
-  }
-
-  writeAccounts([...accounts, account])
-  // Conta nova num telemóvel que já tinha outra: começa limpa.
-  if (accounts.length) hydrate({})
-  localStorage.setItem(SESSION, account.id)
+  // O primeiro registo leva o que já está neste telemóvel (playlists, gostos,
+  // estatísticas). Contas seguintes no mesmo aparelho começam limpas.
+  const jaTinhaConta = Boolean(cached)
+  const dados = jaTinhaConta ? {} : snapshot()
+  const resposta = await pedir<RespostaConta>('/api/auth/registar', {
+    metodo: 'POST',
+    corpo: { nome: input.name, email: input.email, senha: input.password, dados },
+  })
+  guardarToken(resposta.token)
+  guardarConta(paraConta(resposta.conta))
+  if (jaTinhaConta) hydrate({})
   emit()
-  return toPublic(account)
+  return cached ?? paraConta(resposta.conta)
 }
 
 export async function signIn(input: { email: string; password: string }): Promise<Account> {
-  const email = normalizeEmail(input.email)
-  const accounts = readAccounts()
-  const account = accounts.find((item) => item.email === email)
-  if (!account) throw fail('Não encontrei essa conta. Cria uma nova.')
-
-  const hash = await hashPassword(input.password, account.salt)
-  if (hash !== account.hash) throw fail('Palavra-passe errada.')
-
-  // Fecha a conta anterior (se houver) antes de abrir esta.
-  saveAccountData()
-  hydrate(account.data)
-  localStorage.setItem(SESSION, account.id)
+  const resposta = await pedir<RespostaConta>('/api/auth/entrar', {
+    metodo: 'POST',
+    corpo: { email: input.email, senha: input.password },
+  })
+  guardarToken(resposta.token)
+  guardarConta(paraConta(resposta.conta))
+  if (resposta.dados) hydrate(resposta.dados)
   emit()
-  return toPublic(account)
+  return cached ?? paraConta(resposta.conta)
 }
 
 export function signOut(): void {
   saveAccountData()
-  try {
-    localStorage.removeItem(SESSION)
-  } catch {
-    /* ignora */
+  const token = lerToken()
+  if (token) {
+    void pedir('/api/auth/sair', { metodo: 'POST', token }).catch(() => {})
   }
+  guardarToken(null)
+  guardarConta(null)
   emit()
-}
-
-export type AccountSummary = {
-  id: string
-  name: string
-  email: string
-  createdAt: number
-  data: Record<string, string | null>
-}
-
-/** Contas guardadas neste aparelho, sem salts nem hashes. */
-export function listAccounts(): AccountSummary[] {
-  return readAccounts().map((item) => ({
-    id: item.id,
-    name: item.name,
-    email: item.email,
-    createdAt: Number(item.createdAt) || 0,
-    data: item.data && typeof item.data === 'object' ? item.data : {},
-  }))
-}
-
-export function hasAccounts(): boolean {
-  return readAccounts().length > 0
 }

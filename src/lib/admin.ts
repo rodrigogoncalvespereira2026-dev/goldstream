@@ -1,30 +1,17 @@
 import { Capacitor } from '@capacitor/core'
-import { listAccounts, type Account } from './account'
 import { readPlaylists } from './userPlaylists'
 import { readStats, type Stats } from './stats'
 import { ALBUMS, GENRES, PLAYLISTS, TRACKS, getTrack } from './catalog'
 import { versaoInstalada } from './update'
+import { pedir } from './api'
 
 /** Única conta com acesso ao painel de administração. */
 export const ADMIN_EMAIL = 'rgp200903@gmail.com'
 
-export const isAdmin = (account: Account | null): boolean =>
+export const isAdmin = (account: { email: string } | null): boolean =>
   Boolean(account && account.email.trim().toLowerCase() === ADMIN_EMAIL)
 
-export type AdminConta = {
-  id: string
-  name: string
-  email: string
-  criadaEm: number
-  atual: boolean
-  gostos: number
-  reproducoes: number
-  segundos: number
-}
-
 export type AdminSnapshot = {
-  contas: AdminConta[]
-  totalContas: number
   playlists: { total: number; musicas: number; maior: string; maiorMusicas: number }
   gostos: number
   estatisticas: Stats
@@ -36,6 +23,32 @@ export type AdminSnapshot = {
   armazenamento: { total: number; chaves: { chave: string; bytes: number }[] }
   app: { versao: string; plataforma: string; motor: string }
 }
+
+export type ContaServidor = {
+  id: string
+  nome: string
+  email: string
+  criadaEm: string | null
+  playlists: number
+  musicas: number
+  gostos: number
+  reproducoes: number
+  segundos: number
+}
+
+export type ResumoServidor = {
+  totalContas: number
+  totalPlaylists: number
+  totalMusicas: number
+  totalGostos: number
+  totalReproducoes: number
+  totalSegundos: number
+  contas: ContaServidor[]
+}
+
+/** Números de todas as contas, vindos da base de dados MongoDB. */
+export const lerResumoServidor = (token: string): Promise<ResumoServidor> =>
+  pedir<ResumoServidor>('/api/admin/resumo', { token })
 
 const BYTES = (texto: string): number => new TextEncoder().encode(texto).length
 
@@ -95,15 +108,6 @@ const contarGostos = (raw: string | null | undefined): number => {
   return Array.isArray(parsed) ? parsed.length : 0
 }
 
-const lerEstatisticas = (
-  raw: string | null | undefined,
-): { reproducoes: number; segundos: number } => {
-  const parsed = parseJSON(raw)
-  if (!parsed || typeof parsed !== 'object') return { reproducoes: 0, segundos: 0 }
-  const value = parsed as { plays?: unknown; seconds?: unknown }
-  return { reproducoes: Number(value.plays) || 0, segundos: Number(value.seconds) || 0 }
-}
-
 const lerArmazenamento = (): { total: number; chaves: { chave: string; bytes: number }[] } => {
   const chaves: { chave: string; bytes: number }[] = []
   try {
@@ -120,41 +124,10 @@ const lerArmazenamento = (): { total: number; chaves: { chave: string; bytes: nu
   return { total: chaves.reduce((soma, item) => soma + item.bytes, 0), chaves }
 }
 
-/**
- * Resumo do painel. Tudo vem do que está guardado neste aparelho: as contas
- * vivem em `localStorage`, não há servidor, por isso não existem totais de
- * outros telemóveis para mostrar.
- */
-export function readAdminSnapshot(account: Account | null): AdminSnapshot {
+/** Números deste aparelho (o total de todas as contas vem do servidor). */
+export function readAdminSnapshot(): AdminSnapshot {
   const estatisticas = readStats()
   const playlists = readPlaylists()
-
-  const contas = listAccounts().map((item) => {
-    const atual = item.id === account?.id
-    const stats = atual
-      ? { reproducoes: estatisticas.plays, segundos: estatisticas.seconds }
-      : lerEstatisticas(item.data['sonora:stats'])
-    let gostos = 0
-    if (atual) {
-      try {
-        gostos = contarGostos(localStorage.getItem('sonora:liked'))
-      } catch {
-        gostos = 0
-      }
-    } else {
-      gostos = contarGostos(item.data['sonora:liked'])
-    }
-    return {
-      id: item.id,
-      name: item.name,
-      email: item.email,
-      criadaEm: item.createdAt,
-      atual,
-      gostos,
-      reproducoes: stats.reproducoes,
-      segundos: stats.segundos,
-    }
-  })
 
   let musicas = 0
   let maior = ''
@@ -185,19 +158,16 @@ export function readAdminSnapshot(account: Account | null): AdminSnapshot {
       : Capacitor.getPlatform()
     : 'Site (navegador)'
 
+  let gostos = 0
+  try {
+    gostos = contarGostos(localStorage.getItem('sonora:liked'))
+  } catch {
+    gostos = 0
+  }
+
   return {
-    contas,
-    totalContas: contas.length,
     playlists: { total: playlists.length, musicas, maior, maiorMusicas },
-    gostos: contarGostos(
-      (() => {
-        try {
-          return localStorage.getItem('sonora:liked')
-        } catch {
-          return null
-        }
-      })(),
-    ),
+    gostos,
     estatisticas,
     hojeMinutos: Math.round((estatisticas.days[today()] ?? 0) / 60),
     semanaMinutos: Math.round(ultimosSete(estatisticas.days) / 60),

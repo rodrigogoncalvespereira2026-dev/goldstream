@@ -1,18 +1,66 @@
+import { useEffect, useState } from 'react'
 import { Section } from '../components/Cards'
 import { SettingsIcon } from '../components/Icons'
 import { useAccount } from '../lib/account'
-import { ADMIN_EMAIL, formatBytes, isAdmin, readAdminSnapshot } from '../lib/admin'
+import { lerToken } from '../lib/api'
+import {
+  ADMIN_EMAIL,
+  formatBytes,
+  isAdmin,
+  lerResumoServidor,
+  readAdminSnapshot,
+  type ResumoServidor,
+} from '../lib/admin'
 import { plural } from '../lib/format'
 import { formatListening } from '../lib/stats'
 import type { Navigate } from '../lib/nav'
 
-const dataCurta = (value: number): string =>
-  value ? new Date(value).toLocaleDateString('pt-PT') : '—'
+const dataCurta = (valor: string | null): string => {
+  if (!valor) return '—'
+  const data = new Date(valor)
+  return Number.isNaN(data.getTime()) ? '—' : data.toLocaleDateString('pt-PT')
+}
 
 export function Admin({ navigate }: { navigate: Navigate }) {
   const account = useAccount()
+  const permitido = isAdmin(account)
+  const [servidor, setServidor] = useState<ResumoServidor | null>(null)
+  const [erro, setErro] = useState('')
+  const [aCarregar, setACarregar] = useState(true)
 
-  if (!isAdmin(account)) {
+  useEffect(() => {
+    if (!permitido) {
+      setACarregar(false)
+      return
+    }
+    const token = lerToken()
+    if (!token) {
+      setErro('Sessão inválida. Volta a entrar na conta.')
+      setACarregar(false)
+      return
+    }
+    let vivo = true
+    lerResumoServidor(token)
+      .then((dados) => {
+        if (!vivo) return
+        setServidor(dados)
+        setErro('')
+      })
+      .catch((falha) => {
+        if (!vivo) return
+        setErro(
+          falha instanceof Error ? falha.message : 'Não consegui ler a base de dados.',
+        )
+      })
+      .finally(() => {
+        if (vivo) setACarregar(false)
+      })
+    return () => {
+      vivo = false
+    }
+  }, [permitido])
+
+  if (!permitido) {
     return (
       <div className="settings-page">
         <header className="settings-intro">
@@ -43,10 +91,7 @@ export function Admin({ navigate }: { navigate: Navigate }) {
     )
   }
 
-  const dados = readAdminSnapshot(account)
-  const media = dados.totalContas
-    ? Math.round(dados.estatisticas.seconds / dados.totalContas)
-    : 0
+  const local = readAdminSnapshot()
 
   return (
     <div className="settings-page">
@@ -54,110 +99,119 @@ export function Admin({ navigate }: { navigate: Navigate }) {
         <span className="settings-eyebrow">ADMIN</span>
         <h1 className="page-title">Administração</h1>
         <p>
-          Números da goldenstream neste aparelho. Só a conta {ADMIN_EMAIL} vê este painel.
+          Números da goldenstream em todos os telemóveis. Só a conta {ADMIN_EMAIL} vê este painel.
         </p>
       </header>
 
-      <p className="admin-notice">
-        As contas são criadas e guardadas dentro de cada telemóvel — não há servidor. Por isso
-        “contas inscritas” são as que existem <strong>neste aparelho</strong>. Para contar as
-        pessoas de todos os telemóveis é preciso guardar as contas num servidor.
-      </p>
+      {aCarregar && <p className="admin-notice">A ler a base de dados…</p>}
+
+      {erro && !aCarregar && (
+        <p className="admin-notice">
+          <strong>Sem dados do servidor.</strong> {erro}
+        </p>
+      )}
 
       <div className="settings-grid">
-        <div className="settings-card settings-card-wide">
-          <Section title="Resumo" note="Neste aparelho">
-            <div className="stat-grid">
-              <div className="stat-card">
-                <strong>{dados.totalContas}</strong>
-                <span>{plural(dados.totalContas, 'conta inscrita', 'contas inscritas')}</span>
-              </div>
-              <div className="stat-card">
-                <strong>{dados.playlists.total}</strong>
-                <span>{plural(dados.playlists.total, 'playlist', 'playlists')}</span>
-              </div>
-              <div className="stat-card">
-                <strong>{dados.playlists.musicas}</strong>
-                <span>{plural(dados.playlists.musicas, 'música', 'músicas')} em playlists</span>
-              </div>
-              <div className="stat-card">
-                <strong>{dados.gostos}</strong>
-                <span>{plural(dados.gostos, 'música curtida', 'músicas curtidas')}</span>
-              </div>
-              <div className="stat-card">
-                <strong>{dados.estatisticas.plays}</strong>
-                <span>{plural(dados.estatisticas.plays, 'reprodução', 'reproduções')}</span>
-              </div>
-              <div className="stat-card">
-                <strong>{formatListening(dados.estatisticas.seconds)}</strong>
-                <span>tempo ouvido</span>
-              </div>
+        {servidor && (
+          <>
+            <div className="settings-card settings-card-wide">
+              <Section title="Base de dados" note="Todas as contas">
+                <div className="stat-grid">
+                  <div className="stat-card">
+                    <strong>{servidor.totalContas}</strong>
+                    <span>
+                      {plural(servidor.totalContas, 'conta inscrita', 'contas inscritas')}
+                    </span>
+                  </div>
+                  <div className="stat-card">
+                    <strong>{servidor.totalPlaylists}</strong>
+                    <span>{plural(servidor.totalPlaylists, 'playlist', 'playlists')}</span>
+                  </div>
+                  <div className="stat-card">
+                    <strong>{servidor.totalMusicas}</strong>
+                    <span>{plural(servidor.totalMusicas, 'música', 'músicas')} em playlists</span>
+                  </div>
+                  <div className="stat-card">
+                    <strong>{servidor.totalGostos}</strong>
+                    <span>{plural(servidor.totalGostos, 'música curtida', 'músicas curtidas')}</span>
+                  </div>
+                  <div className="stat-card">
+                    <strong>{servidor.totalReproducoes}</strong>
+                    <span>{plural(servidor.totalReproducoes, 'reprodução', 'reproduções')}</span>
+                  </div>
+                  <div className="stat-card">
+                    <strong>{formatListening(servidor.totalSegundos)}</strong>
+                    <span>tempo ouvido</span>
+                  </div>
+                </div>
+                <p className="settings-note">
+                  Os números de cada conta atualizam-se quando essa pessoa usa a app.
+                </p>
+              </Section>
             </div>
-            {dados.playlists.maior && (
-              <p className="settings-note">
-                Maior playlist: <strong>{dados.playlists.maior}</strong> com{' '}
-                {plural(dados.playlists.maiorMusicas, 'música', 'músicas')}. Média de{' '}
-                {formatListening(media)} ouvidos por conta.
-              </p>
-            )}
-          </Section>
-        </div>
 
-        <div className="settings-card settings-card-wide">
-          <Section
-            title="Contas"
-            note={plural(dados.totalContas, 'conta registada', 'contas registadas')}
-          >
-            <div className="admin-scroll">
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>Nome</th>
-                    <th>Email</th>
-                    <th>Criada</th>
-                    <th>Gostos</th>
-                    <th>Reproduções</th>
-                    <th>Tempo</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {dados.contas.map((conta) => (
-                    <tr key={conta.id}>
-                      <td>
-                        {conta.name}
-                        {conta.atual && <span className="admin-badge">sessão atual</span>}
-                      </td>
-                      <td>{conta.email}</td>
-                      <td>{dataCurta(conta.criadaEm)}</td>
-                      <td>{conta.gostos}</td>
-                      <td>{conta.reproducoes}</td>
-                      <td>{formatListening(conta.segundos)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="settings-card settings-card-wide">
+              <Section
+                title="Contas"
+                note={plural(servidor.totalContas, 'conta registada', 'contas registadas')}
+              >
+                <div className="admin-scroll">
+                  <table className="admin-table">
+                    <thead>
+                      <tr>
+                        <th>Nome</th>
+                        <th>Email</th>
+                        <th>Criada</th>
+                        <th>Playlists</th>
+                        <th>Gostos</th>
+                        <th>Reproduções</th>
+                        <th>Tempo</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {servidor.contas.map((conta) => (
+                        <tr key={conta.id}>
+                          <td>
+                            {conta.nome}
+                            {account && conta.id === account.id && (
+                              <span className="admin-badge">sessão atual</span>
+                            )}
+                          </td>
+                          <td>{conta.email}</td>
+                          <td>{dataCurta(conta.criadaEm)}</td>
+                          <td>{conta.playlists}</td>
+                          <td>{conta.gostos}</td>
+                          <td>{conta.reproducoes}</td>
+                          <td>{formatListening(conta.segundos)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Section>
             </div>
-          </Section>
-        </div>
+          </>
+        )}
 
         <div className="settings-card">
-          <Section title="Atividade" note="Ritmo de audição">
+          <Section title="Neste aparelho" note="Atividade">
             <div className="stat-grid">
               <div className="stat-card">
-                <strong>{dados.hojeMinutos}</strong>
+                <strong>{local.hojeMinutos}</strong>
                 <span>minutos hoje</span>
               </div>
               <div className="stat-card">
-                <strong>{dados.semanaMinutos}</strong>
+                <strong>{local.semanaMinutos}</strong>
                 <span>minutos nos últimos 7 dias</span>
               </div>
               <div className="stat-card">
-                <strong>{dados.sequencia}</strong>
-                <span>{plural(dados.sequencia, 'dia seguido', 'dias seguidos')}</span>
+                <strong>{local.sequencia}</strong>
+                <span>{plural(local.sequencia, 'dia seguido', 'dias seguidos')}</span>
               </div>
             </div>
             <p className="settings-note">
-              O dia conta a partir do primeiro minuto ouvido nesse dia.
+              Playlists aqui: {local.playlists.total} · gostos: {local.gostos} ·{' '}
+              {formatListening(local.estatisticas.seconds)} ouvidos.
             </p>
           </Section>
         </div>
@@ -166,16 +220,16 @@ export function Admin({ navigate }: { navigate: Navigate }) {
           <Section title="Catálogo" note="O que a app tem">
             <div className="settings-tech-list">
               <span>
-                Faixas <strong>{dados.catalogo.faixas}</strong>
+                Faixas <strong>{local.catalogo.faixas}</strong>
               </span>
               <span>
-                Álbuns <strong>{dados.catalogo.albums}</strong>
+                Álbuns <strong>{local.catalogo.albums}</strong>
               </span>
               <span>
-                Playlists <strong>{dados.catalogo.playlists}</strong>
+                Playlists <strong>{local.catalogo.playlists}</strong>
               </span>
               <span>
-                Géneros <strong>{dados.catalogo.generos}</strong>
+                Géneros <strong>{local.catalogo.generos}</strong>
               </span>
             </div>
           </Section>
@@ -183,9 +237,9 @@ export function Admin({ navigate }: { navigate: Navigate }) {
 
         <div className="settings-card settings-card-wide">
           <Section title="Mais ouvidas" note="Top 5 neste aparelho">
-            {dados.topFaixas.length ? (
+            {local.topFaixas.length ? (
               <ol className="top-list">
-                {dados.topFaixas.map((faixa, index) => (
+                {local.topFaixas.map((faixa, index) => (
                   <li key={faixa.id} className="top-row">
                     <span className="top-rank">{index + 1}</span>
                     <span className="top-text">
@@ -205,7 +259,7 @@ export function Admin({ navigate }: { navigate: Navigate }) {
         </div>
 
         <div className="settings-card">
-          <Section title="Armazenamento" note={formatBytes(dados.armazenamento.total)}>
+          <Section title="Armazenamento" note={formatBytes(local.armazenamento.total)}>
             <div className="admin-scroll">
               <table className="admin-table">
                 <thead>
@@ -215,7 +269,7 @@ export function Admin({ navigate }: { navigate: Navigate }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {dados.armazenamento.chaves.map((item) => (
+                  {local.armazenamento.chaves.map((item) => (
                     <tr key={item.chave}>
                       <td>{item.chave}</td>
                       <td>{formatBytes(item.bytes)}</td>
@@ -225,7 +279,7 @@ export function Admin({ navigate }: { navigate: Navigate }) {
               </table>
             </div>
             <p className="settings-note">
-              Tudo o que a app guarda fica no armazenamento local do aparelho.
+              Cache local do aparelho; os dados da conta ficam também na base de dados.
             </p>
           </Section>
         </div>
@@ -234,13 +288,13 @@ export function Admin({ navigate }: { navigate: Navigate }) {
           <Section title="App" note="Estado da instalação">
             <div className="settings-tech-list">
               <span>
-                Versão <strong>{dados.app.versao}</strong>
+                Versão <strong>{local.app.versao}</strong>
               </span>
               <span>
-                Plataforma <strong>{dados.app.plataforma}</strong>
+                Plataforma <strong>{local.app.plataforma}</strong>
               </span>
               <span>
-                Áudio <strong>{dados.app.motor}</strong>
+                Áudio <strong>{local.app.motor}</strong>
               </span>
             </div>
           </Section>
