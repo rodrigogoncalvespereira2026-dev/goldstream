@@ -10,7 +10,9 @@ if (!URI) {
 
 const PORTA = Number(process.env.PORT) || 8787
 const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'rgp200903@gmail.com').trim().toLowerCase()
-const DIAS_SESSAO = 120
+const DIAS_SESSAO = 365
+/** Renova a sessão quando faltam menos dias do que isto. */
+const RENOVAR_ANTES_MS = 30 * 24 * 60 * 60 * 1000
 const LIMITE_CORPO = 2 * 1024 * 1024
 const ORIGENS = (
   process.env.ORIGENS ||
@@ -103,6 +105,14 @@ const contaAutenticada = async (req) => {
   if (sessao.expiraEm instanceof Date && sessao.expiraEm.getTime() < Date.now()) {
     await sessoes.deleteOne({ token })
     return null
+  }
+  // Sessão que está a ser usada não expira: cada pedido empurra a validade.
+  if (
+    sessao.expiraEm instanceof Date &&
+    sessao.expiraEm.getTime() - Date.now() < RENOVAR_ANTES_MS
+  ) {
+    const expiraEm = new Date(Date.now() + DIAS_SESSAO * 24 * 60 * 60 * 1000)
+    await sessoes.updateOne({ _id: sessao._id }, { $set: { expiraEm } })
   }
   const conta = await contas.findOne({ _id: sessao.contaId })
   if (!conta) {

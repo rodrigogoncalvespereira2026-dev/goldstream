@@ -145,6 +145,23 @@ const hidratar = (dados: Record<string, string | null>, contaId: string): boolea
   return porEnviar
 }
 
+const comTempoLimite = <T>(promessa: Promise<T>, ms: number): Promise<T> =>
+  new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => {
+      reject(new ErroApi('O servidor está a demorar.', 0))
+    }, ms)
+    promessa.then(
+      (valor) => {
+        window.clearTimeout(timer)
+        resolve(valor)
+      },
+      (falha) => {
+        window.clearTimeout(timer)
+        reject(falha)
+      },
+    )
+  })
+
 /** Envia o estado atual do app para a conta no servidor. */
 export async function enviarDados(): Promise<void> {
   const token = lerToken()
@@ -177,7 +194,9 @@ export async function restaurarSessao(): Promise<void> {
   }
   if (!cached) return
   try {
-    const resposta = await pedir<RespostaEu>('/api/auth/eu', { token })
+    // A API pode estar a acordar (plano free): não vale a pena segurar o
+    // arranque da app à espera. Sem resposta a tempo, abre com o telemóvel.
+    const resposta = await comTempoLimite(pedir<RespostaEu>('/api/auth/eu', { token }), 4000)
     const porEnviar = hidratar(resposta.dados ?? {}, resposta.conta.id)
     guardarConta(paraConta(resposta.conta))
     emit()
