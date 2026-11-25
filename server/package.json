@@ -5,6 +5,7 @@
   "version": "0.1.0",
   "scripts": {
     "start": "node index.mjs",
+    "build": "echo \"sem passo de build\"",
     "test-ligacao": "node --env-file=.env test-connection.mjs"
   },
   "dependencies": {
