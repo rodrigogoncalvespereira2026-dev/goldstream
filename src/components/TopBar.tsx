@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { ArrowLeftIcon, ArrowRightIcon, SearchIcon } from './Icons'
 import type { Navigate } from '../lib/nav'
 import { cx } from '../lib/format'
@@ -26,6 +27,7 @@ export function TopBar({
   scrolled,
 }: TopBarProps) {
   const [profile] = useProfile()
+  const campoBusca = useRef<HTMLInputElement>(null)
 
   return (
     <div className={cx('topbar', scrolled && 'is-scrolled')}>
@@ -53,13 +55,21 @@ export function TopBar({
       <label className="search-field">
         <SearchIcon size={20} />
         <input
+          ref={campoBusca}
           type="search"
+          enterKeyHint="search"
           value={query}
           placeholder="O que você quer ouvir?"
           aria-label="Buscar músicas, álbuns e artistas"
           onChange={(event) => onQuery(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === 'Escape') onQuery('')
+            // Ao premir pesquisar/a vançar, os resultados já estão na tela:
+            // tira o foco para o teclado do telemóvel fechar.
+            if (event.key === 'Enter') {
+              event.preventDefault()
+              campoBusca.current?.blur()
+            }
           }}
         />
       </label>
