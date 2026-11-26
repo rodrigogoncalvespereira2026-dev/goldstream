@@ -30,6 +30,7 @@ import { PrivacyConsent } from './components/PrivacyConsent'
 import { UpdateBanner } from './components/UpdateBanner'
 import { GENRES, getAlbum, getPlaylist } from './lib/catalog'
 import { cx } from './lib/format'
+import { vigiarTeclado } from './lib/teclado'
 import type { View } from './lib/nav'
 
 const tintFor = (view: View): string => {
@@ -61,6 +62,9 @@ function Shell() {
   useEffect(() => {
     if (consent?.analytics) trackPageView(view.type)
   }, [consent?.analytics, view.type])
+
+  // Rolar os resultados fecha o teclado, que de outra forma os tapava.
+  useEffect(() => vigiarTeclado(), [])
 
   const navigate = useCallback(
     (target: View) => {

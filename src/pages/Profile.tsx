@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { getTrack } from '../lib/catalog'
 import { plural } from '../lib/format'
 import { photoFromFile, useProfile } from '../lib/profile'
+import { fecharTeclado } from '../lib/teclado'
 import { formatListening, useStats } from '../lib/stats'
 import { usePlayer } from '../lib/player'
 import { Avatar } from '../components/Avatar'
@@ -41,6 +42,7 @@ export function Profile({ navigate }: { navigate: Navigate }) {
     })
 
   const save = () => {
+    fecharTeclado()
     const clean = name.trim() || profile.name
     setProfile({ ...profile, name: clean })
     setName(clean)

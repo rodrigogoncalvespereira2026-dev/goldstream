@@ -10,6 +10,7 @@ import {
 import { TrackRow } from '../components/Cards'
 import { MusicNoteIcon, PlayIcon, TrashIcon } from '../components/Icons'
 import { formatLongDuration, plural } from '../lib/format'
+import { fecharTeclado } from '../lib/teclado'
 import type { Navigate } from '../lib/nav'
 
 export function MyPlaylist({ id, navigate }: { id: string; navigate: Navigate }) {
@@ -74,6 +75,7 @@ export function MyPlaylist({ id, navigate }: { id: string; navigate: Navigate })
               className="mine-rename"
               onSubmit={(event) => {
                 event.preventDefault()
+                fecharTeclado()
                 renamePlaylist(playlist.id, name)
               }}
             >

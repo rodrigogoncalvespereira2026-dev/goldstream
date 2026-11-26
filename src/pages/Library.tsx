@@ -5,6 +5,7 @@ import { createPlaylist, deletePlaylist, useUserPlaylists } from '../lib/userPla
 import { useHidden } from '../lib/hidden'
 import { cx, plural } from '../lib/format'
 import { usePlayer } from '../lib/player'
+import { fecharTeclado } from '../lib/teclado'
 import type { Navigate } from '../lib/nav'
 
 type Filter = 'all' | 'playlists' | 'albums'
@@ -67,6 +68,7 @@ export function Library({ navigate }: { navigate: Navigate }) {
             onSubmit={(event) => {
               event.preventDefault()
               if (!newName.trim()) return
+              fecharTeclado()
               const created = createPlaylist(newName)
               setNewName('')
               navigate({ type: 'mine', id: created.id })

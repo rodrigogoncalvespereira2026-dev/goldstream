@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { usePlayer } from '../lib/player'
 import { trackFromYouTubeLink } from '../lib/youtube'
+import { fecharTeclado } from '../lib/teclado'
 
 export function YouTubeLink() {
   const { playQueue } = usePlayer()
@@ -16,6 +17,7 @@ export function YouTubeLink() {
         const link = value.trim()
         if (!link || status === 'loading') return
 
+        fecharTeclado()
         setStatus('loading')
         setMessage('')
         try {

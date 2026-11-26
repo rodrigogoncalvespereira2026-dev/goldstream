@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { addToPlaylist, createPlaylist, toggleInPlaylist, useUserPlaylists } from '../lib/userPlaylists'
 import { CheckIcon, PlusIcon } from './Icons'
 import { cx } from '../lib/format'
+import { fecharTeclado } from '../lib/teclado'
 
 type PlaylistSheetProps = {
   trackId: string
@@ -34,6 +35,7 @@ export function PlaylistSheet({ trackId, onClose }: PlaylistSheetProps) {
           onSubmit={(event) => {
             event.preventDefault()
             if (!name.trim()) return
+            fecharTeclado()
             const created = createPlaylist(name)
             addToPlaylist(created.id, trackId)
             setName('')
