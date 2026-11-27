@@ -77,8 +77,8 @@ android {
         minSdk = 26
         targetSdk = 36
         applicationId "co.median.android.abdmyxd"
-        versionCode 6
-        versionName "1.0.3"
+        versionCode 7
+        versionName "1.0.4"
         vectorDrawables.useSupportLibrary = true
 
         manifestPlaceholders = [manifestApplicationId: "${applicationId}",

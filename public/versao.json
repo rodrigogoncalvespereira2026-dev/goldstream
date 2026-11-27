@@ -1,9 +1,5 @@
 {
-  "versao": "1.0.3",
-  "codigo": 6,
-  "novidades": [
-    "A música continua a tocar quando sais da app, com aviso e botões.",
-    "O aviso mostra o nome, o artista, a capa e os minutos da faixa.",
-    "O botão de atualização nas Definições volta a detetar versões novas."
-  ]
+  "versao": "1.0.4",
+  "codigo": 7,
+  "novidades": []
 }
