@@ -53,6 +53,9 @@ public class BackgroundAudioService extends Service {
     /** Para onde vão os botões do aviso / MediaSession. */
     public interface ControlListener {
         void onControl(String action);
+
+        /** O utilizador arrastou a barra do aviso/ecrã bloqueado (posição em ms). */
+        default void onSeek(long positionMs) { }
     }
 
     /** O que está a tocar, vindo da página. */
@@ -195,6 +198,8 @@ public class BackgroundAudioService extends Service {
             @Override public void onSkipToNext() { sendControl("next"); }
             @Override public void onSkipToPrevious() { sendControl("prev"); }
             @Override public void onStop() { sendControl("pause"); }
+            // Sem isto a barra do aviso mexia mas a música ficava no mesmo sítio.
+            @Override public void onSeekTo(long pos) { sendSeek(pos); }
         });
         session.setSessionActivity(contentIntent());
         session.setActive(true);
@@ -255,6 +260,18 @@ public class BackgroundAudioService extends Service {
         }
         ControlListener listener = controlListener;
         if (listener != null) listener.onControl(action);
+    }
+
+    /** Arrastar a barra do aviso: mostra já a posição e manda-a à página. */
+    private void sendSeek(long positionMs) {
+        if (positionMs < 0) return;
+        if (state != null) {
+            state = new NowPlaying(state.playing, state.title, state.artist, state.album,
+                    state.artwork, positionMs, state.durationMs);
+            refresh();
+        }
+        ControlListener listener = controlListener;
+        if (listener != null) listener.onSeek(positionMs);
     }
 
     private boolean isMusicActive() {

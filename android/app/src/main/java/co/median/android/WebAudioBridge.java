@@ -362,7 +362,16 @@ public final class WebAudioBridge {
             Log.w(TAG, "Não foi possível ligar a ponte de áudio", e);
         }
 
-        BackgroundAudioService.setControlListener(WebAudioBridge::sendControl);
+        BackgroundAudioService.setControlListener(new BackgroundAudioService.ControlListener() {
+            @Override public void onControl(String action) {
+                sendControl(action);
+            }
+
+            // Arrastar a barra do aviso chega à página como "seek:<ms>".
+            @Override public void onSeek(long positionMs) {
+                sendControl("seek:" + positionMs);
+            }
+        });
     }
 
     public static boolean isAppVisible() {

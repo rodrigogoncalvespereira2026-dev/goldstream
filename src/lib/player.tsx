@@ -1740,7 +1740,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     const onControl = (event: Event) => {
       const action = (event as CustomEvent<string>).detail
       const controls = nativeControlsRef.current
-      if (action === 'next') controls.next()
+      if (action.startsWith('seek:')) {
+        // Barra do aviso do APK: chega em milissegundos, o player usa segundos.
+        const ms = Number(action.slice(5))
+        if (Number.isFinite(ms) && ms >= 0) seekRef.current(ms / 1000)
+      } else if (action === 'next') controls.next()
       else if (action === 'prev') controls.prev()
       else if (action === 'toggle') controls.toggle()
       else if (action === 'play' && !intentRef.current.play) controls.toggle()
