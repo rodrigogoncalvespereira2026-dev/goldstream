@@ -5076,20 +5076,48 @@ img {
 .lyrics-backdrop {
   /* Acima do "agora tocando", que no telemóvel ocupa o ecrã todo (z-index 100). */
   z-index: 140;
-  background: rgba(0, 0, 0, 0.72);
+  background: rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+/* A capa da faixa, esticada e desfocada, serve de fundo à letra. */
+.lyrics-glow {
+  position: fixed;
+  inset: -15%;
+  background-position: center;
+  background-size: cover;
+  filter: blur(46px) saturate(1.35);
+  opacity: 0.95;
+  pointer-events: none;
 }
 
 .lyrics-sheet {
   position: relative;
-  width: min(520px, 100%);
+  width: min(560px, 100%);
   height: 88vh;
   max-height: 88vh;
   gap: 0;
   padding: 0;
   overflow: hidden;
   border-radius: 20px 20px 0 0;
-  background: linear-gradient(180deg, #171717 0%, #0a0a0a 100%);
-  box-shadow: 0 -24px 60px rgba(0, 0, 0, 0.6);
+  /* Translúcida: deixa passar a capa desfocada que está por baixo. */
+  background: linear-gradient(180deg, rgba(14, 14, 14, 0.5) 0%, rgba(6, 6, 6, 0.88) 100%);
+  box-shadow: 0 -24px 60px rgba(0, 0, 0, 0.5);
+}
+
+@media (max-width: 760px) {
+  /* No telemóvel ocupa o ecrã todo, sem moldura de folha. */
+  .lyrics-sheet {
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .lyrics-header {
+    padding-top: calc(14px + var(--safe-top, env(safe-area-inset-top, 0px)));
+  }
 }
 
 @media (min-width: 761px) {
@@ -5102,11 +5130,18 @@ img {
 
 .lyrics-header {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  align-items: center;
   gap: 12px;
-  padding: 18px 18px 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 14px 18px;
+}
+
+.lyrics-cover {
+  width: 46px;
+  height: 46px;
+  flex: none;
+  border-radius: 8px;
+  object-fit: cover;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
 }
 
 .lyrics-title-wrapper {
@@ -5118,18 +5153,20 @@ img {
 
 .lyrics-title {
   margin: 0;
-  font-size: 11px;
+  font-size: 17px;
   font-weight: 800;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.55);
+  letter-spacing: -0.01em;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .lyrics-subtitle {
   margin: 0;
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.62);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -5186,40 +5223,43 @@ img {
 .lyrics-container {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 12px;
 }
 
+/* Letra grande, com a linha da música em branco e as outras a desfocar. */
 .lyrics-line {
   position: relative;
   margin: 0;
-  padding: 6px 12px;
-  border-radius: 8px;
-  font-size: 17px;
-  font-weight: 500;
-  line-height: 1.5;
-  color: var(--lyrics-color-inactive, rgba(255, 255, 255, 0.6));
-  transition: color 0.2s ease, background 0.2s ease;
+  padding: 2px 0;
+  font-size: 25px;
+  font-weight: 800;
+  line-height: 1.24;
+  letter-spacing: -0.02em;
+  color: var(--lyrics-color-inactive, rgba(255, 255, 255, 0.55));
+  transition: color 0.25s ease, filter 0.25s ease, opacity 0.25s ease;
 }
 
 .lyrics-line.is-passed {
-  color: var(--lyrics-color-passed, rgba(255, 255, 255, 0.36));
+  color: var(--lyrics-color-passed, rgba(255, 255, 255, 0.34));
 }
 
 .lyrics-line.is-active {
   color: var(--lyrics-color-active, #ffffff);
-  font-weight: 700;
-  background: rgba(255, 255, 255, 0.06);
 }
 
-.lyrics-line.is-active::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 9px;
-  bottom: 9px;
-  width: 3px;
-  border-radius: 999px;
-  background: var(--accent);
+.lyrics-line.blur-near {
+  filter: blur(1px);
+  opacity: 0.8;
+}
+
+.lyrics-line.blur-mid {
+  filter: blur(2px);
+  opacity: 0.55;
+}
+
+.lyrics-line.blur-far {
+  filter: blur(3px);
+  opacity: 0.32;
 }
 
 .lyrics-sheet .sheet-empty {
@@ -5233,7 +5273,6 @@ img {
   justify-content: center;
   gap: 8px;
   padding: 10px 20px 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .lyrics-sync button {
@@ -5270,7 +5309,6 @@ img {
 .lyrics-source {
   margin: 0;
   padding: 12px 20px calc(14px + env(safe-area-inset-bottom, 0px));
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
   font-size: 12px;
   color: rgba(255, 255, 255, 0.45);
   text-align: center;

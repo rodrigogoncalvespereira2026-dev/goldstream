@@ -4,6 +4,7 @@ import { cx } from '../lib/format'
 import type { Track } from '../lib/catalog'
 import { fetchLyrics, type LyricsResult, parseSyncedLyrics, type SyncedLine } from '../lib/lyrics'
 import { offsetText, useLyricClock } from '../lib/useLyricClock'
+import { CoverImage } from './CoverImage'
 
 /** Folha com a letra completa da faixa em curso. */
 export function LyricsSheet({ track, onClose }: { track: Track; onClose: () => void }) {
@@ -68,6 +69,12 @@ export function LyricsSheet({ track, onClose }: { track: Track; onClose: () => v
   // por cima do player.
   return createPortal(
     <div className="sheet-backdrop lyrics-backdrop" onClick={onClose}>
+      {/* A capa desfocada por trás é o fundo da letra, como num leitor de música. */}
+      <span
+        className="lyrics-glow"
+        style={{ backgroundImage: `url("${track.cover}")` }}
+        aria-hidden="true"
+      />
       <div
         className="sheet lyrics-sheet"
         role="dialog"
@@ -76,13 +83,12 @@ export function LyricsSheet({ track, onClose }: { track: Track; onClose: () => v
         onClick={(event) => event.stopPropagation()}
       >
         <header className="lyrics-header">
+          <CoverImage className="lyrics-cover" src={track.cover} loading="eager" />
           <div className="lyrics-title-wrapper">
             <h2 className="lyrics-title" id="lyrics-sheet-title">
-              Letra
+              {track.title}
             </h2>
-            <p className="lyrics-subtitle">
-              {track.title} · {track.artist}
-            </p>
+            <p className="lyrics-subtitle">{track.artist}</p>
           </div>
           <button type="button" className="lyrics-close" onClick={onClose} aria-label="Fechar letra">
             ×
@@ -103,6 +109,8 @@ export function LyricsSheet({ track, onClose }: { track: Track; onClose: () => v
               {syncedLines.length ? (
                 syncedLines.map((line, index) => {
                   const isActive = index === activeLineIndex
+                  // Quanto mais longe da linha que está a tocar, mais desfocada fica.
+                  const distance = activeLineIndex < 0 ? 0 : Math.abs(index - activeLineIndex)
                   return (
                     <p
                       key={index}
@@ -110,6 +118,9 @@ export function LyricsSheet({ track, onClose }: { track: Track; onClose: () => v
                       className={cx('lyrics-line', {
                         'is-active': isActive,
                         'is-passed': index < activeLineIndex,
+                        'blur-near': distance === 1,
+                        'blur-mid': distance === 2 || distance === 3,
+                        'blur-far': distance > 3,
                       })}
                     >
                       {line.text}
