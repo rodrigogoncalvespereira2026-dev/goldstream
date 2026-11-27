@@ -5199,7 +5199,7 @@ img {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 24px 20px 32px;
+  padding: 20px 22px 40px;
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.24) transparent;
   /* Desvanecimento suave no topo e no fundo da lista. */
@@ -5223,28 +5223,30 @@ img {
 .lyrics-container {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 /* Letra grande, com a linha da música em branco e as outras a desfocar. */
 .lyrics-line {
   position: relative;
   margin: 0;
-  padding: 2px 0;
-  font-size: 25px;
-  font-weight: 800;
-  line-height: 1.24;
-  letter-spacing: -0.02em;
-  color: var(--lyrics-color-inactive, rgba(255, 255, 255, 0.55));
+  padding: 0;
+  font-size: clamp(24px, 7vw, 30px);
+  font-weight: 700;
+  line-height: 1.22;
+  letter-spacing: -0.025em;
+  color: var(--lyrics-color-inactive, rgba(255, 255, 255, 0.5));
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.45);
   transition: color 0.25s ease, filter 0.25s ease, opacity 0.25s ease;
 }
 
 .lyrics-line.is-passed {
-  color: var(--lyrics-color-passed, rgba(255, 255, 255, 0.34));
+  color: var(--lyrics-color-passed, rgba(255, 255, 255, 0.3));
 }
 
 .lyrics-line.is-active {
   color: var(--lyrics-color-active, #ffffff);
+  font-weight: 700;
 }
 
 .lyrics-line.blur-near {
@@ -5676,6 +5678,17 @@ img {
   filter: none;
   -webkit-mask-image: radial-gradient(circle, #000 0%, transparent 70%);
   mask-image: radial-gradient(circle, #000 0%, transparent 70%);
+}
+
+/* A capa desfocada da letra: um blur de 46px a cobrir o ecrã obrigava o WebView
+   a rasterizar uma imagem enorme. Fica com um blur pequeno e a máscara radial a
+   fazer o degradê, como nos fundos. */
+.is-webview .lyrics-glow {
+  inset: -6%;
+  filter: blur(12px) saturate(1.2);
+  opacity: 0.8;
+  -webkit-mask-image: radial-gradient(circle at 50% 40%, #000 0%, transparent 78%);
+  mask-image: radial-gradient(circle at 50% 40%, #000 0%, transparent 78%);
 }
 
 /* Barras do equalizador: animavam `height`, o que refaz o layout e repinta em
