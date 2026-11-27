@@ -22,6 +22,7 @@ import {
   VolumeIcon,
 } from './Icons'
 import { cx } from '../lib/format'
+import { useVideoAtivo } from '../lib/videoOpcao'
 
 export function PlayerBar() {
   const {
@@ -44,6 +45,7 @@ export function PlayerBar() {
     openWatch,
   } = usePlayer()
   const { currentTime, duration, seek } = usePlayerTime()
+  const [videoAtivo] = useVideoAtivo()
   const isMobile = useMediaQuery('(max-width: 760px)')
   const [expanded, setExpanded] = useState(false)
   const [queueOpen, setQueueOpen] = useState(false)
@@ -96,7 +98,7 @@ export function PlayerBar() {
                 </span>
               </button>
               <RadioButton artist={current.artist} variant="icon" />
-              {current.provider === 'youtube' && current.videoId && (
+              {videoAtivo && current.provider === 'youtube' && current.videoId && (
                 <button
                   type="button"
                   className="icon-button player-watch"

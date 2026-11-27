@@ -3,6 +3,7 @@ import type { TouchEvent as ReactTouchEvent } from 'react'
 import { getAlbum, getTrack } from '../lib/catalog'
 import { fetchLyrics, type LyricsResult, parseSyncedLyrics, type SyncedLine } from '../lib/lyrics'
 import { useLyricClock } from '../lib/useLyricClock'
+import { useVideoAtivo } from '../lib/videoOpcao'
 import { cx, formatTime } from '../lib/format'
 import { usePlayer, usePlayerTime } from '../lib/player'
 import { getYT, loadYouTubeApi, type YTPlayer } from '../lib/youtube'
@@ -78,6 +79,7 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
 
   // Modo vídeo: o vídeo toca no lugar da capa e o áudio da app fica em pausa.
   const watching = Boolean(watchInline && watchVideoId)
+  const [videoAtivo] = useVideoAtivo()
 
   const showVideo = () => {
     if (!current?.videoId) return
@@ -357,7 +359,7 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
             </div>
 
             <div className="np-actions">
-              {current.provider === 'youtube' && current.videoId && (
+              {(videoAtivo || watching) && current.provider === 'youtube' && current.videoId && (
                 <button
                   type="button"
                   className={cx('np-watch', watching && 'is-on')}

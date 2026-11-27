@@ -5,6 +5,7 @@ import { usePlayer } from '../lib/player'
 import { HeartIcon, PauseIcon, PlayIcon, PlusIcon, VideoIcon } from './Icons'
 import { CoverImage } from './CoverImage'
 import { PlaylistSheet } from './PlaylistSheet'
+import { useVideoAtivo } from '../lib/videoOpcao'
 
 type MediaCardProps = {
   title: string
@@ -112,6 +113,7 @@ export function TrackRow({
 }: TrackRowProps) {
   const { current, isPlaying, toggleLike, isLiked, durations, openWatch } = usePlayer()
   const [sheetOpen, setSheetOpen] = useState(false)
+  const [videoAtivo] = useVideoAtivo()
   const active = current?.id === track.id
   const liked = isLiked(track.id)
   const length = durations[track.id] ?? track.duration
@@ -192,7 +194,7 @@ export function TrackRow({
             <span aria-hidden="true">×</span>
           </button>
         )}
-        {track.provider === 'youtube' && track.videoId && (
+        {videoAtivo && track.provider === 'youtube' && track.videoId && (
           <button
             type="button"
             className="track-video"

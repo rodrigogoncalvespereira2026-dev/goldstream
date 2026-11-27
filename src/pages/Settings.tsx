@@ -17,6 +17,7 @@ import {
 import { signOut, useAccount } from '../lib/account'
 import { ADMIN_EMAIL, isAdmin } from '../lib/admin'
 import { setConsentPreferences, useConsentPreferences } from '../lib/analytics'
+import { useVideoAtivo } from '../lib/videoOpcao'
 import type { Navigate } from '../lib/nav'
 
 export function Settings({ navigate }: { navigate: Navigate }) {
@@ -25,6 +26,7 @@ export function Settings({ navigate }: { navigate: Navigate }) {
   const currentBackground = BACKGROUNDS.find((item) => item.id === background)
   const account = useAccount()
   const consent = useConsentPreferences()
+  const [videoAtivo, setVideoAtivo] = useVideoAtivo()
   const consentLabel = consent
     ? `Analytics ${consent.analytics ? 'permitido' : 'recusado'} · Retargeting ${consent.retargeting ? 'permitido' : 'recusado'}`
     : 'Ainda não escolhido'
@@ -106,6 +108,28 @@ export function Settings({ navigate }: { navigate: Navigate }) {
             {currentBackground && (
               <p className="settings-current-value">Fundo atual: {currentBackground.name}</p>
             )}
+          </Section>
+        </div>
+
+        <div className="settings-card">
+          <Section title="Reprodução" note={videoAtivo ? 'Vídeo ligado' : 'Vídeo desligado'}>
+            <p className="settings-note">
+              Ligado, aparece o botão "Ver vídeo" nas músicas do YouTube. Desligado, a app
+              esconde esses botões e fica só com o áudio.
+            </p>
+            <div className="privacy-settings-options">
+              <label className="privacy-settings-option">
+                <input
+                  type="checkbox"
+                  checked={videoAtivo}
+                  onChange={(event) => setVideoAtivo(event.target.checked)}
+                />
+                <span>
+                  <strong>Mostrar a opção de ver vídeo</strong>
+                  <small>Mostra o botão "Ver vídeo" no player e nas listas de músicas.</small>
+                </span>
+              </label>
+            </div>
           </Section>
         </div>
 
