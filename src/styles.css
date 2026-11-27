@@ -5691,6 +5691,13 @@ img {
   mask-image: radial-gradient(circle at 50% 40%, #000 0%, transparent 78%);
 }
 
+/* Rolbar a letra no WebView com cada linha a ter o seu blur era o que mais
+   pesava: aqui as linhas ficam nítidas e só a opacidade as distingue. */
+.is-webview .lyrics-line {
+  filter: none !important;
+  transition: color 0.25s ease, opacity 0.25s ease;
+}
+
 /* Barras do equalizador: animavam `height`, o que refaz o layout e repinta em
    cada frame enquanto a música toca. No WebView o player do YouTube corre na
    mesma thread que a página, por isso cada frame destes roubava-lhe tempo e o
