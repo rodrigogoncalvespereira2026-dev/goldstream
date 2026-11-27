@@ -118,17 +118,23 @@ export function Settings({ navigate }: { navigate: Navigate }) {
               esconde esses botões e fica só com o áudio.
             </p>
             <div className="privacy-settings-options">
-              <label className="privacy-settings-option">
-                <input
-                  type="checkbox"
-                  checked={videoAtivo}
-                  onChange={(event) => setVideoAtivo(event.target.checked)}
-                />
-                <span>
+              <div className="settings-toggle-row">
+                <span className="settings-toggle-text">
                   <strong>Mostrar a opção de ver vídeo</strong>
                   <small>Mostra o botão "Ver vídeo" no player e nas listas de músicas.</small>
                 </span>
-              </label>
+                <label className="switch">
+                  <input
+                    type="checkbox"
+                    checked={videoAtivo}
+                    onChange={(event) => setVideoAtivo(event.target.checked)}
+                    aria-label="Mostrar a opção de ver vídeo"
+                  />
+                  <span className="switch-track" aria-hidden="true">
+                    <span className="switch-knob" />
+                  </span>
+                </label>
+              </div>
             </div>
           </Section>
         </div>

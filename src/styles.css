@@ -2911,6 +2911,95 @@ img {
   line-height: 1.4;
 }
 
+/* ---------- Interruptor das Definições ----------
+   A opção de vídeo usa um interruptor em vez de uma caixa de seleção: verde
+   quando está ligado e um contorno cinzento com o botão à esquerda quando não. */
+
+.settings-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 60px;
+  padding: 11px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.16);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.settings-toggle-text {
+  display: grid;
+  gap: 3px;
+}
+
+.settings-toggle-text strong {
+  font-size: 12px;
+}
+
+.settings-toggle-text small {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.switch {
+  position: relative;
+  flex: none;
+  width: 52px;
+  height: 30px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.switch input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.switch-track {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 2px solid rgba(140, 140, 140, 0.95);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+
+.switch-knob {
+  display: block;
+  width: 24px;
+  height: 24px;
+  margin: 1px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  transform: translateX(0);
+  transition: transform 160ms ease;
+}
+
+.switch input:checked ~ .switch-track {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.switch input:checked ~ .switch-track .switch-knob {
+  transform: translateX(22px);
+}
+
+.switch input:focus-visible ~ .switch-track {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
 .privacy-consent-actions {
   display: flex;
   flex-wrap: wrap;
