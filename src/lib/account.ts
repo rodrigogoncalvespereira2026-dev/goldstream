@@ -35,6 +35,7 @@ const DATA_KEYS = [
   'sonora:background',
   'sonora:player',
   'sonora:mine',
+  'sonora:ver-video',
 ]
 
 const CONTA = 'sonora:conta'
@@ -219,6 +220,9 @@ export async function signUp(input: {
   // mesmo aparelho começa limpa.
   const jaTinhaConta = Boolean(cached)
   const dados = jaTinhaConta ? {} : snapshot()
+  // Conta nova: a opção de vídeo nasce desligada, mesmo que este telemóvel a
+  // tivesse ligado noutra conta.
+  dados['sonora:ver-video'] = '0'
   const resposta = await pedir<RespostaConta>('/api/auth/registar', {
     metodo: 'POST',
     corpo: { nome: input.name, email: input.email, senha: input.password, dados },
@@ -259,7 +263,14 @@ export async function signOut(): Promise<void> {
  * estatísticas, perfil, fundo) vão para a base de dados, sem esperar que a
  * pessoa saia da app.
  */
-const EVENTOS = ['sonora:mine', 'sonora:stats', 'sonora:profile', 'sonora:background', 'sonora:hidden']
+const EVENTOS = [
+  'sonora:mine',
+  'sonora:stats',
+  'sonora:profile',
+  'sonora:background',
+  'sonora:hidden',
+  'sonora:ver-video',
+]
 
 if (typeof window !== 'undefined') {
   let timer: number | null = null
