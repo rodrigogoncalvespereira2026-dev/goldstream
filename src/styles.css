@@ -5684,8 +5684,8 @@ img {
    a rasterizar uma imagem enorme. Fica com um blur pequeno e a máscara radial a
    fazer o degradê, como nos fundos. */
 .is-webview .lyrics-glow {
-  inset: -6%;
-  filter: blur(12px) saturate(1.2);
+  inset: 0;
+  filter: none;
   opacity: 0.8;
   -webkit-mask-image: radial-gradient(circle at 50% 40%, #000 0%, transparent 78%);
   mask-image: radial-gradient(circle at 50% 40%, #000 0%, transparent 78%);
