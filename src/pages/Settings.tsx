@@ -216,38 +216,50 @@ export function Settings({ navigate }: { navigate: Navigate }) {
               não tem GTM nem pixels configurados.
             </p>
             <div className="privacy-settings-options">
-              <label className="privacy-settings-option">
-                <input
-                  type="checkbox"
-                  checked={consent?.analytics ?? false}
-                  onChange={(event) =>
-                    setConsentPreferences({
-                      analytics: event.target.checked,
-                      retargeting: consent?.retargeting ?? false,
-                    })
-                  }
-                />
-                <span>
+              <div className="settings-toggle-row">
+                <span className="settings-toggle-text">
                   <strong>Analytics de utilização</strong>
                   <small>Tipo de página e pedidos de reprodução, sem identificar faixas.</small>
                 </span>
-              </label>
-              <label className="privacy-settings-option">
-                <input
-                  type="checkbox"
-                  checked={consent?.retargeting ?? false}
-                  onChange={(event) =>
-                    setConsentPreferences({
-                      analytics: consent?.analytics ?? false,
-                      retargeting: event.target.checked,
-                    })
-                  }
-                />
-                <span>
+                <label className="switch">
+                  <input
+                    type="checkbox"
+                    checked={consent?.analytics ?? false}
+                    aria-label="Analytics de utilização"
+                    onChange={(event) =>
+                      setConsentPreferences({
+                        analytics: event.target.checked,
+                        retargeting: consent?.retargeting ?? false,
+                      })
+                    }
+                  />
+                  <span className="switch-track" aria-hidden="true">
+                    <span className="switch-knob" />
+                  </span>
+                </label>
+              </div>
+              <div className="settings-toggle-row">
+                <span className="settings-toggle-text">
                   <strong>Retargeting e pixels</strong>
                   <small>Permite usar IDs de publicidade configurados para a app.</small>
                 </span>
-              </label>
+                <label className="switch">
+                  <input
+                    type="checkbox"
+                    checked={consent?.retargeting ?? false}
+                    aria-label="Retargeting e pixels"
+                    onChange={(event) =>
+                      setConsentPreferences({
+                        analytics: consent?.analytics ?? false,
+                        retargeting: event.target.checked,
+                      })
+                    }
+                  />
+                  <span className="switch-track" aria-hidden="true">
+                    <span className="switch-knob" />
+                  </span>
+                </label>
+              </div>
             </div>
           </Section>
         </div>
