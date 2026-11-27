@@ -18,6 +18,7 @@ import { signOut, useAccount } from '../lib/account'
 import { ADMIN_EMAIL, isAdmin } from '../lib/admin'
 import { setConsentPreferences, useConsentPreferences } from '../lib/analytics'
 import { useVideoAtivo } from '../lib/videoOpcao'
+import { useNpTransparente } from '../lib/npTransparente'
 import type { Navigate } from '../lib/nav'
 
 export function Settings({ navigate }: { navigate: Navigate }) {
@@ -27,6 +28,7 @@ export function Settings({ navigate }: { navigate: Navigate }) {
   const account = useAccount()
   const consent = useConsentPreferences()
   const [videoAtivo, setVideoAtivo] = useVideoAtivo()
+  const [fundoTransparente, setFundoTransparente] = useNpTransparente()
   const consentLabel = consent
     ? `Analytics ${consent.analytics ? 'permitido' : 'recusado'} · Retargeting ${consent.retargeting ? 'permitido' : 'recusado'}`
     : 'Ainda não escolhido'
@@ -104,6 +106,27 @@ export function Settings({ navigate }: { navigate: Navigate }) {
               >
                 Cores do tema
               </button>
+            </div>
+            <div className="privacy-settings-options">
+              <div className="settings-toggle-row">
+                <span className="settings-toggle-text">
+                  <strong>Fundo transparente no player</strong>
+                  <small>
+                    O ecrã "Agora tocando" deixa ver o fundo da tela em vez de ficar escuro.
+                  </small>
+                </span>
+                <label className="switch">
+                  <input
+                    type="checkbox"
+                    checked={fundoTransparente}
+                    aria-label="Fundo transparente no player"
+                    onChange={(event) => setFundoTransparente(event.target.checked)}
+                  />
+                  <span className="switch-track" aria-hidden="true">
+                    <span className="switch-knob" />
+                  </span>
+                </label>
+              </div>
             </div>
             {currentBackground && (
               <p className="settings-current-value">Fundo atual: {currentBackground.name}</p>

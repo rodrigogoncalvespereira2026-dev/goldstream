@@ -4,6 +4,9 @@ import { getAlbum, getTrack } from '../lib/catalog'
 import { fetchLyrics, type LyricsResult, parseSyncedLyrics, type SyncedLine } from '../lib/lyrics'
 import { useLyricClock } from '../lib/useLyricClock'
 import { useVideoAtivo } from '../lib/videoOpcao'
+import { useNpTransparente } from '../lib/npTransparente'
+import { useBackground } from '../lib/backgrounds'
+import { BackgroundScene } from './BackgroundScene'
 import { cx, formatTime } from '../lib/format'
 import { usePlayer, usePlayerTime } from '../lib/player'
 import { getYT, loadYouTubeApi, type YTPlayer } from '../lib/youtube'
@@ -80,6 +83,8 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
   // Modo vídeo: o vídeo toca no lugar da capa e o áudio da app fica em pausa.
   const watching = Boolean(watchInline && watchVideoId)
   const [videoAtivo] = useVideoAtivo()
+  const [fundoTransparente] = useNpTransparente()
+  const [background] = useBackground()
 
   const showVideo = () => {
     if (!current?.videoId) return
@@ -266,7 +271,7 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
   return (
     <div
       ref={sheetRef}
-      className={cx('now-playing', dragging && 'is-dragging')}
+      className={cx('now-playing', dragging && 'is-dragging', fundoTransparente && 'is-transparente')}
       role="dialog"
       aria-modal="true"
       aria-label="Agora tocando"
@@ -284,6 +289,10 @@ export function NowPlaying({ open, onClose }: NowPlayingProps) {
         transition: dragging ? 'none' : 'transform 0.22s ease',
       }}
     >
+      {fundoTransparente && <div className="np-backdrop" aria-hidden="true">
+          <BackgroundScene id={background} />
+        </div>}
+
       <div className="np-inner">
         <div className={cx('np-top', scrolled && 'is-scrolled')}>
           <button type="button" className="np-round" onClick={onClose} aria-label="Minimizar player">

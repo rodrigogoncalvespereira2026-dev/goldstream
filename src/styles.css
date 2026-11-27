@@ -2771,6 +2771,36 @@ img {
   transition: none;
 }
 
+/* ---------- fundo transparente no player (Definições → Aparência) ----------
+   O ecrã "Agora tocando" já não pinta nada por si: fica por cima da página, e
+   o que se vê é o fundo dela. Com a opção ligada, o fundo da tela escolhido é
+   desenhado dentro do próprio player, preso ao ecrã e por trás do conteúdo. */
+
+.now-playing.is-transparente {
+  background: transparent;
+}
+
+.np-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  /* Véu leve para o texto continuar legível por cima do fundo. */
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.32) 0%, rgba(0, 0, 0, 0.7) 100%);
+}
+
+.now-playing.is-transparente .np-inner {
+  position: relative;
+  z-index: 1;
+}
+
+/* Sem animação dentro do APK a cena fica estática, o que é o desejado. */
+.np-backdrop .bg-scene {
+  position: absolute;
+  inset: 0;
+}
+
 /* ---------- atualizar a app ---------- */
 
 .settings-actions {

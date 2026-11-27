@@ -36,6 +36,7 @@ const DATA_KEYS = [
   'sonora:player',
   'sonora:mine',
   'sonora:ver-video',
+  'sonora:np-transparente',
 ]
 
 const CONTA = 'sonora:conta'
@@ -270,6 +271,7 @@ const EVENTOS = [
   'sonora:background',
   'sonora:hidden',
   'sonora:ver-video',
+  'sonora:np-transparente',
 ]
 
 if (typeof window !== 'undefined') {
