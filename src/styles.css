@@ -343,8 +343,15 @@ img {
   color: var(--text);
 }
 
+/* A lupa não encolhe nem desaparece: com a cor do texto lê-se em qualquer fundo. */
+.search-field > svg {
+  flex: none;
+  color: var(--text);
+}
+
 .search-field input {
   flex: 1;
+  min-width: 0;
   height: 100%;
   border: 0;
   outline: none;
