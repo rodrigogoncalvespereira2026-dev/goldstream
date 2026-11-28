@@ -28,6 +28,14 @@ export const SearchIcon = ({ size = 24, ...rest }: IconProps) => (
   </svg>
 )
 
+export const MicIcon = ({ size = 24, ...rest }: IconProps) => (
+  <svg {...base(size)} {...rest}>
+    <rect x="9" y="2.5" width="6" height="11" rx="3" />
+    <path d="M5.5 11a6.5 6.5 0 0 0 13 0" />
+    <path d="M12 17.5V21" />
+  </svg>
+)
+
 export const LibraryIcon = ({ size = 24, ...rest }: IconProps) => (
   <svg {...base(size)} {...rest}>
     <path d="M4 4v16M8.6 4v16M13.4 4.6l3.8 14.6" />

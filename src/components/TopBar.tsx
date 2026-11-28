@@ -1,5 +1,6 @@
 import { useRef } from 'react'
-import { ArrowLeftIcon, ArrowRightIcon, SearchIcon } from './Icons'
+import { ArrowLeftIcon, ArrowRightIcon, MicIcon, SearchIcon } from './Icons'
+import { useEscuta } from '../lib/voz'
 import type { Navigate } from '../lib/nav'
 import { cx } from '../lib/format'
 import { useProfile } from '../lib/profile'
@@ -28,6 +29,8 @@ export function TopBar({
 }: TopBarProps) {
   const [profile] = useProfile()
   const campoBusca = useRef<HTMLInputElement>(null)
+  // Falar o nome da música: o texto reconhecido entra na busca como se fosse escrito.
+  const escuta = useEscuta(onQuery)
 
   return (
     <div className={cx('topbar', scrolled && 'is-scrolled')}>
@@ -59,7 +62,7 @@ export function TopBar({
           type="search"
           enterKeyHint="search"
           value={query}
-          placeholder="O que você quer ouvir?"
+          placeholder={escuta.aviso || 'O que você quer ouvir?'}
           aria-label="Buscar músicas, álbuns e artistas"
           onChange={(event) => onQuery(event.target.value)}
           onKeyDown={(event) => {
@@ -72,6 +75,20 @@ export function TopBar({
             }
           }}
         />
+        {escuta.disponivel && (
+          <button
+            type="button"
+            className={cx('search-mic', escuta.aOuvir && 'is-ouvindo')}
+            onClick={() => escuta.alternar()}
+            // Sem tirar o foco do campo, o teclado não salta ao carregar no microfone.
+            onMouseDown={(event) => event.preventDefault()}
+            aria-label={escuta.aOuvir ? 'Parar de ouvir' : 'Falar o nome da música'}
+            aria-pressed={escuta.aOuvir}
+            title={escuta.aOuvir ? 'A ouvir…' : 'Falar o nome da música'}
+          >
+            <MicIcon size={18} />
+          </button>
+        )}
       </label>
 
       <button
