@@ -52,11 +52,20 @@ export function useEscuta(aoOuvir: (texto: string) => void) {
   const [aviso, setAviso] = useState('')
   const reconhecimento = useRef<Reconhecimento | null>(null)
   const temporizador = useRef<number | null>(null)
+  /** Sem resposta nenhuma, a escuta tem de acabar: senão o botão ficava a piscar. */
+  const limite = useRef<number | null>(null)
 
   const limparTemporizador = () => {
     if (temporizador.current) {
       window.clearTimeout(temporizador.current)
       temporizador.current = null
+    }
+  }
+
+  const limparLimite = () => {
+    if (limite.current) {
+      window.clearTimeout(limite.current)
+      limite.current = null
     }
   }
 
@@ -67,6 +76,7 @@ export function useEscuta(aoOuvir: (texto: string) => void) {
   }, [])
 
   const parar = useCallback(() => {
+    limparLimite()
     reconhecimento.current?.stop()
     reconhecimento.current = null
     setAOuvir(false)
@@ -77,6 +87,7 @@ export function useEscuta(aoOuvir: (texto: string) => void) {
       reconhecimento.current?.abort()
       reconhecimento.current = null
       limparTemporizador()
+      limparLimite()
     },
     [],
   )
@@ -99,12 +110,17 @@ export function useEscuta(aoOuvir: (texto: string) => void) {
     r.interimResults = false
     r.maxAlternatives = 1
     r.onresult = (event) => {
+      limparLimite()
       const texto = event.results?.[0]?.[0]?.transcript?.trim() ?? ''
       if (texto) aoOuvir(texto)
       else avisar('Não ouvi nada — fala outra vez')
     }
-    r.onerror = (event) => avisar(motivo(event.error ?? ''))
+    r.onerror = (event) => {
+      limparLimite()
+      avisar(motivo(event.error ?? ''))
+    }
     r.onend = () => {
+      limparLimite()
       reconhecimento.current = null
       setAOuvir(false)
     }
@@ -114,6 +130,13 @@ export function useEscuta(aoOuvir: (texto: string) => void) {
       reconhecimento.current = r
       setAviso('')
       setAOuvir(true)
+      limparLimite()
+      limite.current = window.setTimeout(() => {
+        reconhecimento.current?.stop()
+        reconhecimento.current = null
+        setAOuvir(false)
+        avisar('Não ouvi nada — fala outra vez')
+      }, 12000)
     } catch {
       avisar('Não consegui ouvir — escreve o nome da música')
     }
