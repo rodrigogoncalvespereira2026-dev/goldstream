@@ -323,7 +323,7 @@ export function Settings({ navigate }: { navigate: Navigate }) {
         <div className="settings-card">
           <Section title="Tocar por link" note="Experimental">
             <p className="settings-note">
-              Cola um link do YouTube para ouvir a faixa completa.
+              Cola um link do YouTube ou do TikTok para ouvir já.
             </p>
             <YouTubeLink />
           </Section>
