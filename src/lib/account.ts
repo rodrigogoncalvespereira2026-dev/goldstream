@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ErroApi, guardarToken, lerToken, pedir } from './api'
+import { lembrarConta } from './contasLembradas'
 
 export type Account = {
   id: string
@@ -201,6 +202,8 @@ export async function restaurarSessao(): Promise<void> {
     const resposta = await comTempoLimite(pedir<RespostaEu>('/api/auth/eu', { token }), 4000)
     const porEnviar = hidratar(resposta.dados ?? {}, resposta.conta.id)
     guardarConta(paraConta(resposta.conta))
+    // Cada abertura recorda a conta para o seletor da página de entrada.
+    lembrarConta(resposta.conta)
     emit()
     if (porEnviar) await enviarDados().catch(() => {})
   } catch (falha) {
@@ -230,6 +233,7 @@ export async function signUp(input: {
   })
   guardarToken(resposta.token)
   guardarConta(paraConta(resposta.conta))
+  lembrarConta(resposta.conta)
   hidratar(jaTinhaConta ? {} : dados, resposta.conta.id)
   emit()
   return cached ?? paraConta(resposta.conta)
@@ -242,6 +246,7 @@ export async function signIn(input: { email: string; password: string }): Promis
   })
   guardarToken(resposta.token)
   guardarConta(paraConta(resposta.conta))
+  lembrarConta(resposta.conta)
   const porEnviar = hidratar(resposta.dados ?? {}, resposta.conta.id)
   emit()
   // O que só existia no telemóvel sobe agora para a conta.

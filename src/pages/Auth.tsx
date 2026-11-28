@@ -1,5 +1,7 @@
 import { useRef, useState, type FormEvent } from 'react'
 import { signIn, signUp } from '../lib/account'
+import { esquecerConta, useContasLembradas, type ContaLembrada } from '../lib/contasLembradas'
+import { initialOf } from '../lib/profile'
 import { LogoMark } from '../components/Icons'
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -15,6 +17,9 @@ export function Auth() {
   const [erros, setErros] = useState<Erros>({})
   const [mostrarSenha, setMostrarSenha] = useState(false)
   const [busy, setBusy] = useState(false)
+  /** Conta escolhida no seletor; com ela só se pede a palavra-passe. */
+  const [escolhida, setEscolhida] = useState<ContaLembrada | null>(null)
+  const contas = useContasLembradas()
   const nomeRef = useRef<HTMLInputElement | null>(null)
   const emailRef = useRef<HTMLInputElement | null>(null)
   const senhaRef = useRef<HTMLInputElement | null>(null)
@@ -37,6 +42,24 @@ export function Auth() {
     setErros((atual) => (atual[campo] ? { ...atual, [campo]: undefined } : atual))
   }
 
+  const escolherConta = (conta: ContaLembrada) => {
+    setEscolhida(conta)
+    setEmail(conta.email)
+    setPassword('')
+    setErros({})
+    setError('')
+    // O email já está preenchido: o que falta escrever é a palavra-passe.
+    senhaRef.current?.focus()
+  }
+
+  const trocarConta = () => {
+    setEscolhida(null)
+    setEmail('')
+    setPassword('')
+    setErros({})
+    emailRef.current?.focus()
+  }
+
   const submit = async (event: FormEvent) => {
     event.preventDefault()
     if (busy) return
@@ -44,7 +67,7 @@ export function Auth() {
     setErros(novos)
     setError('')
     if (novos.nome || novos.email || novos.senha) {
-      const primeiro = novos.nome ? nomeRef : novos.email ? emailRef : senhaRef
+      const primeiro = novos.nome ? nomeRef : novos.email && !escolhida ? emailRef : senhaRef
       primeiro.current?.focus()
       return
     }
@@ -59,6 +82,8 @@ export function Auth() {
       setBusy(false)
     }
   }
+
+  const mostrarSeletor = mode === 'in' && contas.length > 0 && !escolhida
 
   return (
     <div className="auth-screen">
@@ -80,8 +105,41 @@ export function Auth() {
         <p className="auth-note">
           {mode === 'up'
             ? 'Assim as tuas músicas, gostos e estatísticas ficam na tua conta — e abrem em qualquer telemóvel.'
-            : 'Usa o email e a palavra-passe com que criaste a conta.'}
+            : 'Escolhe uma conta deste telemóvel ou usa o email e a palavra-passe.'}
         </p>
+
+        {mostrarSeletor && (
+          <div className="auth-accounts">
+            <p className="auth-accounts-label">Contas neste telemóvel</p>
+            {contas.map((conta) => (
+              <div key={conta.id} className="auth-account">
+                <button
+                  type="button"
+                  className="auth-account-pick"
+                  onClick={() => escolherConta(conta)}
+                >
+                  <span className="auth-avatar" aria-hidden="true">
+                    {initialOf(conta.nome || conta.email)}
+                  </span>
+                  <span className="auth-account-text">
+                    <strong>{conta.nome || conta.email}</strong>
+                    <small>{conta.email}</small>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="auth-account-forget"
+                  onClick={() => esquecerConta(conta.id)}
+                  aria-label={`Esquecer a conta ${conta.email}`}
+                  title="Esquecer esta conta"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+            <p className="auth-accounts-sep">ou com email e palavra-passe</p>
+          </div>
+        )}
 
         {mode === 'up' && (
           <label className="auth-field">
@@ -111,34 +169,49 @@ export function Auth() {
           </label>
         )}
 
-        <label className="auth-field">
-          <span>Email</span>
-          <span className="auth-input-wrap">
-            <input
-              ref={emailRef}
-              type="email"
-              value={email}
-              onChange={(event) => {
-                setEmail(event.target.value)
-                limparErro('email')
-              }}
-              placeholder="tu@exemplo.com"
-              autoComplete="email"
-              inputMode="email"
-              autoCapitalize="none"
-              autoCorrect="off"
-              spellCheck={false}
-              enterKeyHint="next"
-              aria-invalid={Boolean(erros.email)}
-              aria-describedby={erros.email ? 'erro-email' : undefined}
-            />
-          </span>
-          {erros.email && (
-            <small className="auth-field-error" id="erro-email">
-              {erros.email}
-            </small>
-          )}
-        </label>
+        {escolhida ? (
+          <div className="auth-picked">
+            <span className="auth-avatar" aria-hidden="true">
+              {initialOf(escolhida.nome || escolhida.email)}
+            </span>
+            <span className="auth-account-text">
+              <strong>{escolhida.nome || escolhida.email}</strong>
+              <small>{escolhida.email}</small>
+            </span>
+            <button type="button" className="auth-picked-change" onClick={trocarConta}>
+              Trocar
+            </button>
+          </div>
+        ) : (
+          <label className="auth-field">
+            <span>Email</span>
+            <span className="auth-input-wrap">
+              <input
+                ref={emailRef}
+                type="email"
+                value={email}
+                onChange={(event) => {
+                  setEmail(event.target.value)
+                  limparErro('email')
+                }}
+                placeholder="tu@exemplo.com"
+                autoComplete="email"
+                inputMode="email"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                enterKeyHint="next"
+                aria-invalid={Boolean(erros.email)}
+                aria-describedby={erros.email ? 'erro-email' : undefined}
+              />
+            </span>
+            {erros.email && (
+              <small className="auth-field-error" id="erro-email">
+                {erros.email}
+              </small>
+            )}
+          </label>
+        )}
 
         <label className="auth-field">
           <span>Palavra-passe</span>
@@ -183,12 +256,7 @@ export function Auth() {
           </p>
         )}
 
-        <button
-          type="submit"
-          className="auth-submit"
-          disabled={busy}
-          aria-busy={busy}
-        >
+        <button type="submit" className="auth-submit" disabled={busy} aria-busy={busy}>
           {busy
             ? mode === 'up'
               ? 'A criar conta…'
@@ -206,6 +274,9 @@ export function Auth() {
             setError('')
             setErros({})
             setMostrarSenha(false)
+            setEscolhida(null)
+            setPassword('')
+            setEmail('')
           }}
         >
           {mode === 'up' ? 'Já tenho conta — entrar' : 'Ainda não tenho conta — criar agora'}
