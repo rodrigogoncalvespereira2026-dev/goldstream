@@ -1,6 +1,11 @@
 import { useRef, useState, type FormEvent } from 'react'
 import { signIn, signUp } from '../lib/account'
-import { esquecerConta, useContasLembradas, type ContaLembrada } from '../lib/contasLembradas'
+import {
+  esquecerConta,
+  lerContasLembradas,
+  useContasLembradas,
+  type ContaLembrada,
+} from '../lib/contasLembradas'
 import { initialOf } from '../lib/profile'
 import { LogoMark } from '../components/Icons'
 
@@ -9,7 +14,11 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 type Erros = { nome?: string; email?: string; senha?: string }
 
 export function Auth() {
-  const [mode, setMode] = useState<'in' | 'up'>('up')
+  // Com contas lembradas, esta página é de quem já tem conta: abre no "entrar"
+  // com o seletor à vista. Sem nenhuma, o primeiro passo é mesmo criar conta.
+  const [mode, setMode] = useState<'in' | 'up'>(() =>
+    lerContasLembradas().length > 0 ? 'in' : 'up',
+  )
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
