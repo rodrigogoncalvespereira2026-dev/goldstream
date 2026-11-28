@@ -96,6 +96,89 @@ const senhaConfere = (senha, sal, hash) => {
 
 const validarEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 
+/* ---------------- TikTok ---------------- */
+
+const HOSTS_TIKTOK = /^(?:www\.|m\.)?tiktok\.com$|^(?:vm|vt)\.tiktok\.com$/i
+const AGENTE_NAVEGADOR =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+
+/** Fetch com prazo: um link do TikTok pendurado não pode prender o pedido. */
+const comPrazo = async (endereco, opcoes = {}, ms = 7000) => {
+  const controle = new AbortController()
+  const timer = setTimeout(() => controle.abort(), ms)
+  try {
+    return await fetch(endereco, { ...opcoes, signal: controle.signal })
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/** Só links do TikTok: evita que a rota vire um proxy para qualquer endereço. */
+const linkTikTok = (valor) => {
+  const texto = String(valor || '').trim()
+  if (!texto) return null
+  try {
+    const url = new URL(/^https?:\/\//i.test(texto) ? texto : `https://${texto}`)
+    return HOSTS_TIKTOK.test(url.hostname) ? url : null
+  } catch {
+    return null
+  }
+}
+
+/** Tira links, hashtags e arrobas: sobra o texto que pode ser o nome da música. */
+const limparTexto = (valor) =>
+  String(valor || '')
+    .replace(/https?:\/\/\S+/g, ' ')
+    .replace(/#[\p{L}\p{N}_]+/gu, ' ')
+    .replace(/@[\w.]+/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+
+/** "original sound - user" não diz que música é. */
+const somGenerico = (valor) =>
+  /^(original sound|som original|original audio|áudio original|audio original)\b/i.test(valor)
+
+/** No TikTok o nome do som costuma ser "Música - Artista". */
+const doNomeDoSom = (titulo) => {
+  const texto = limparTexto(titulo)
+  if (!texto || somGenerico(texto)) return { musica: null, autor: null }
+  const partes = texto.split(/\s+[-–—]\s+/)
+  const musica = partes[0].replace(/\s*\((?:feat|ft)\.?[^)]*\)/i, '').trim()
+  const autor = partes.length > 1 ? partes.slice(1).join(' - ').trim() : null
+  return { musica: musica || null, autor }
+}
+
+/** Nome do som no JSON que a página do vídeo traz. */
+const somDaPagina = (html) => {
+  const padroes = [
+    /"musicInfo":\{"music":\{[^}]*?"title":"((?:[^"\\]|\\.)*)"/,
+    /"music":\{"id":"[^"]*","title":"((?:[^"\\]|\\.)*)"/,
+    /"songName":"((?:[^"\\]|\\.)*)"/,
+  ]
+  for (const padrao of padroes) {
+    const achado = padrao.exec(html)
+    if (!achado) continue
+    try {
+      const titulo = JSON.parse(`"${achado[1]}"`)
+      if (typeof titulo === 'string' && titulo.trim()) return titulo
+    } catch {
+      /* escapatória estranha: tenta o padrão seguinte */
+    }
+  }
+  return null
+}
+
+/** Página /music/<nome-do-som>-<id>: o nome está no próprio endereço. */
+const somDoEndereco = (url) => {
+  const partes = url.pathname.split('/').filter(Boolean)
+  if (partes[0] !== 'music' || !partes[1]) return null
+  const texto = decodeURIComponent(partes[1])
+    .replace(/-\d+$/, '')
+    .replace(/-/g, ' ')
+    .trim()
+  return texto || null
+}
+
 const abrirSessao = async (contaId) => {
   const token = randomBytes(32).toString('hex')
   const expiraEm = new Date(Date.now() + DIAS_SESSAO * 24 * 60 * 60 * 1000)
@@ -359,6 +442,86 @@ const servidor = createServer(async (req, res) => {
         await letras.deleteMany({ _id: { $in: antigas.map((item) => item._id) } })
       }
       responder(res, 200, { ok: true })
+      return
+    }
+
+    // Um link do TikTok dá o nome da música; a app procura depois a faixa completa.
+    if (req.method === 'GET' && rota === '/api/tiktok/resolver') {
+      const pedido = linkTikTok(url.searchParams.get('url'))
+      if (!pedido) throw new Erro(400, 'Isso não parece um link do TikTok.')
+
+      let final = pedido
+      let html = ''
+      try {
+        const resposta = await comPrazo(pedido.href, {
+          redirect: 'follow',
+          headers: {
+            'user-agent': AGENTE_NAVEGADOR,
+            'accept-language': 'pt-PT,pt;q=0.9,en;q=0.8',
+            accept: 'text/html,application/xhtml+xml',
+          },
+        })
+        if (resposta.ok) {
+          if (resposta.url) final = new URL(resposta.url)
+          html = (await resposta.text()).slice(0, 500000)
+        }
+      } catch {
+        /* página indisponível: ainda se tenta o oEmbed */
+      }
+
+      let legenda = null
+      let autor = null
+      let capa = null
+      try {
+        const resposta = await comPrazo(
+          `https://www.tiktok.com/oembed?url=${encodeURIComponent(final.href)}`,
+          { headers: { 'user-agent': AGENTE_NAVEGADOR } },
+        )
+        if (resposta.ok) {
+          const meta = await resposta.json()
+          legenda = typeof meta.title === 'string' ? limparTexto(meta.title) : null
+          autor = typeof meta.author_name === 'string' ? meta.author_name : null
+          capa = typeof meta.thumbnail_url === 'string' ? meta.thumbnail_url : null
+        }
+      } catch {
+        /* metadados são opcionais */
+      }
+
+      const doSom = doNomeDoSom(somDaPagina(html) || somDoEndereco(final) || '')
+      const daLegenda =
+        legenda && !somGenerico(legenda)
+          ? doNomeDoSom(legenda)
+          : { musica: null, autor: null }
+      const musica = doSom.musica || daLegenda.musica || legenda || null
+      const artistaDoSom = doSom.autor || daLegenda.autor || autor
+      const termo = [
+        musica,
+        artistaDoSom &&
+        !String(musica || '')
+          .toLowerCase()
+          .includes(String(artistaDoSom).toLowerCase())
+          ? artistaDoSom
+          : '',
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .trim()
+
+      if (!termo) {
+        throw new Erro(
+          422,
+          'Não consegui ler o nome da música nesse link. Escreve o nome dela na busca.',
+        )
+      }
+
+      responder(res, 200, {
+        termo: termo.slice(0, 160),
+        musica: musica ? String(musica).slice(0, 120) : null,
+        autor: artistaDoSom ? String(artistaDoSom).slice(0, 80) : null,
+        capa: capa ? String(capa).slice(0, 500) : null,
+        legenda: legenda ? legenda.slice(0, 200) : null,
+        link: final.href,
+      })
       return
     }
 

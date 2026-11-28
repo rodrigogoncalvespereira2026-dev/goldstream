@@ -5,6 +5,12 @@ import { rankByRelevance, searchYouTubeSongs, YOUTUBE_API_KEY } from '../lib/you
 import { AlbumCard, MediaCard, Section, TrackRow } from '../components/Cards'
 import { usePlayer } from '../lib/player'
 import { useSearchHistory } from '../lib/searchHistory'
+import {
+  parseTikTokLink,
+  resolverTikTok,
+  useDescobertasTikTok,
+  type AchadoTikTok,
+} from '../lib/tiktok'
 import type { Navigate } from '../lib/nav'
 
 type SearchState = {
@@ -75,8 +81,49 @@ export function Search({ query, navigate }: { query: string; navigate: Navigate 
   const [youTube, setYouTube] = useState<SearchState>(idle)
   const [attempt, setAttempt] = useState(0)
 
+  // Um link do TikTok não é uma pesquisa: primeiro descobre-se que música é.
+  const linkTikTok = useMemo(() => parseTikTokLink(query), [query])
+  const [tiktok, setTiktok] = useState<{
+    estado: 'idle' | 'a-procurar' | 'pronto' | 'erro'
+    achado?: AchadoTikTok
+    erro?: string
+  }>({ estado: 'idle' })
+  const [descobertas, guardarDescoberta] = useDescobertasTikTok()
+  const [linkTikTokInput, setLinkTikTokInput] = useState('')
+
   useEffect(() => {
-    if (trimmed.length < 2) {
+    if (!linkTikTok) {
+      setTiktok({ estado: 'idle' })
+      return
+    }
+
+    let vivo = true
+    setTiktok({ estado: 'a-procurar' })
+    resolverTikTok(linkTikTok)
+      .then((achado) => {
+        if (!vivo) return
+        setTiktok({ estado: 'pronto', achado })
+        guardarDescoberta({
+          termo: achado.termo,
+          musica: achado.musica ?? achado.termo,
+          autor: achado.autor ?? '',
+          capa: achado.capa ?? '',
+        })
+      })
+      .catch((error: unknown) => {
+        if (vivo) setTiktok({ estado: 'erro', erro: errorMessage(error) })
+      })
+
+    return () => {
+      vivo = false
+    }
+  }, [linkTikTok, attempt])
+
+  // Com um link do TikTok, procura-se o nome que o servidor tirou de lá.
+  const busca = linkTikTok ? (tiktok.achado?.termo ?? '') : trimmed
+
+  useEffect(() => {
+    if (busca.length < 2) {
       setFull(idle)
       setYouTube(idle)
       return
@@ -98,24 +145,70 @@ export function Search({ query, navigate }: { query: string; navigate: Navigate 
     }
 
     const timer = window.setTimeout(() => {
-      rememberSearch(trimmed)
+      rememberSearch(busca)
       settle(
-        searchFullSongs(trimmed, controller.signal).then((tracks) => rankByRelevance(trimmed, tracks)),
+        searchFullSongs(busca, controller.signal).then((tracks) => rankByRelevance(busca, tracks)),
         setFull,
       )
-      settle(searchYouTubeSongs(trimmed, youTubeKey, controller.signal, 30), setYouTube)
+      settle(searchYouTubeSongs(busca, youTubeKey, controller.signal, 30), setYouTube)
     }, 350)
 
     return () => {
       window.clearTimeout(timer)
       controller.abort()
     }
-  }, [trimmed, attempt])
+  }, [busca, attempt])
 
   if (!trimmed) {
     return (
       <div>
         <h1 className="page-title">Buscar</h1>
+
+        <Section
+          title="Músicas do TikTok"
+          note="Cola o link do vídeo e a app encontra a música completa"
+        >
+          <form
+            className="tiktok-form"
+            onSubmit={(event) => {
+              event.preventDefault()
+              const link = parseTikTokLink(linkTikTokInput) ?? linkTikTokInput.trim()
+              if (!link) return
+              navigate({ type: 'search', query: link })
+            }}
+          >
+            <input
+              className="tiktok-input"
+              type="url"
+              inputMode="url"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
+              placeholder="https://www.tiktok.com/@…/video/…"
+              aria-label="Link do TikTok"
+              value={linkTikTokInput}
+              onChange={(event) => setLinkTikTokInput(event.target.value)}
+            />
+            <button className="tiktok-button" type="submit" disabled={!linkTikTokInput.trim()}>
+              Procurar
+            </button>
+          </form>
+
+          {descobertas.length > 0 && (
+            <div className="chips tiktok-recentes">
+              {descobertas.map((item) => (
+                <button
+                  key={`${item.termo}-${item.em}`}
+                  type="button"
+                  className="chip"
+                  onClick={() => navigate({ type: 'search', query: item.termo })}
+                >
+                  {item.musica}
+                </button>
+              ))}
+            </div>
+          )}
+        </Section>
 
         {history.length > 0 && (
           <Section title="Pesquisas recentes" action="Limpar" onAction={clearHistory}>
@@ -170,10 +263,43 @@ export function Search({ query, navigate }: { query: string; navigate: Navigate 
 
   const youTubeIds = youTube.tracks.map((track) => track.id)
 
+  if (linkTikTok && tiktok.estado !== 'pronto') {
+    return (
+      <div>
+        <h1 className="page-title">Do TikTok</h1>
+
+        {tiktok.estado === 'erro' ? (
+          <div className="search-error">
+            <span>
+              {tiktok.erro}{' '}
+              <em>Podes escrever o nome da música na busca.</em>
+            </span>
+            <button type="button" className="retry-button" onClick={() => setAttempt((n) => n + 1)}>
+              Tentar de novo
+            </button>
+          </div>
+        ) : (
+          <div className="search-status">
+            <span className="spinner" aria-hidden="true" />
+            A ler o link do TikTok…
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div>
       <h1 className="page-title">
-        Resultados para <span className="query-echo">“{trimmed}”</span>
+        {linkTikTok ? (
+          <>
+            Do TikTok <span className="query-echo">“{busca || trimmed}”</span>
+          </>
+        ) : (
+          <>
+            Resultados para <span className="query-echo">“{trimmed}”</span>
+          </>
+        )}
       </h1>
 
       <Section
@@ -202,7 +328,7 @@ export function Search({ query, navigate }: { query: string; navigate: Navigate 
 
         {youTube.status === 'ready' && youTube.tracks.length === 0 && (
           <div className="search-status">
-            Nenhuma música tocável para “{trimmed}”. Tente incluir “áudio” ou “lyrics” no termo, ou
+            Nenhuma música tocável para “{busca}”. Tente incluir “áudio” ou “lyrics” no termo, ou
             cole o link direto da música.
           </div>
         )}
