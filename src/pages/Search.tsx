@@ -380,7 +380,8 @@ export function Search({ query, navigate }: { query: string; navigate: Navigate 
 
         {full.status === 'ready' && full.tracks.length === 0 && (
           <div className="search-status">
-            Nenhuma faixa completa para “{trimmed}” no catálogo livre de artistas independentes.
+            Nenhuma faixa completa para “{busca || trimmed}” no catálogo livre de artistas
+            independentes.
           </div>
         )}
 
