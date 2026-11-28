@@ -5076,7 +5076,9 @@ img {
 .lyrics-backdrop {
   /* Acima do "agora tocando", que no telemóvel ocupa o ecrã todo (z-index 100). */
   z-index: 140;
-  background: rgba(0, 0, 0, 0.5);
+  /* Opaco: o player por baixo não pode aparecer através da letra. O fundo que
+     se vê é a capa desfocada desenhada dentro deste véu. */
+  background: #06060a;
   overflow: hidden;
 }
 
@@ -5174,6 +5176,8 @@ img {
 
 .lyrics-close {
   flex: none;
+  /* Sempre encostado ao canto direito, por muito comprido que seja o título. */
+  margin-left: auto;
   width: 40px;
   height: 40px;
   display: grid;
