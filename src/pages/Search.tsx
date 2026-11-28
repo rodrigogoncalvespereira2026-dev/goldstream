@@ -5,13 +5,7 @@ import { rankByRelevance, searchYouTubeSongs, YOUTUBE_API_KEY } from '../lib/you
 import { AlbumCard, MediaCard, Section, TrackRow } from '../components/Cards'
 import { usePlayer } from '../lib/player'
 import { useSearchHistory } from '../lib/searchHistory'
-import {
-  parseTikTokLink,
-  resolverTikTok,
-  trackDoSom,
-  useDescobertasTikTok,
-  type AchadoTikTok,
-} from '../lib/tiktok'
+import { parseTikTokLink, resolverTikTok, trackDoSom, type AchadoTikTok } from '../lib/tiktok'
 import type { Navigate } from '../lib/nav'
 import { useTikTokAtivo } from '../lib/tiktokOpcao'
 
@@ -93,8 +87,7 @@ export function Search({ query, navigate }: { query: string; navigate: Navigate 
     achado?: AchadoTikTok
     erro?: string
   }>({ estado: 'idle' })
-  const [descobertas, guardarDescoberta] = useDescobertasTikTok()
-  const [linkTikTokInput, setLinkTikTokInput] = useState('')
+
 
   useEffect(() => {
     if (!linkTikTok) {
@@ -108,12 +101,6 @@ export function Search({ query, navigate }: { query: string; navigate: Navigate 
       .then((achado) => {
         if (!vivo) return
         setTiktok({ estado: 'pronto', achado })
-        guardarDescoberta({
-          termo: achado.termo,
-          musica: achado.musica ?? achado.termo,
-          autor: achado.autor ?? '',
-          capa: achado.capa ?? '',
-        })
       })
       .catch((error: unknown) => {
         if (vivo) setTiktok({ estado: 'erro', erro: errorMessage(error) })
@@ -174,54 +161,6 @@ export function Search({ query, navigate }: { query: string; navigate: Navigate 
     return (
       <div>
         <h1 className="page-title">Buscar</h1>
-
-        {tiktokAtivo && (
-          <Section
-            title="Músicas do TikTok"
-            note="Cola o link do vídeo e a app encontra a música completa"
-          >
-            <form
-              className="tiktok-form"
-              onSubmit={(event) => {
-                event.preventDefault()
-                const link = parseTikTokLink(linkTikTokInput) ?? linkTikTokInput.trim()
-                if (!link) return
-                navigate({ type: 'search', query: link })
-              }}
-            >
-              <input
-                className="tiktok-input"
-                type="url"
-                inputMode="url"
-                autoCapitalize="off"
-                autoCorrect="off"
-                spellCheck={false}
-                placeholder="https://www.tiktok.com/@…/video/…"
-                aria-label="Link do TikTok"
-                value={linkTikTokInput}
-                onChange={(event) => setLinkTikTokInput(event.target.value)}
-              />
-              <button className="tiktok-button" type="submit" disabled={!linkTikTokInput.trim()}>
-                Procurar
-              </button>
-            </form>
-
-            {descobertas.length > 0 && (
-              <div className="chips tiktok-recentes">
-                {descobertas.map((item) => (
-                  <button
-                    key={`${item.termo}-${item.em}`}
-                    type="button"
-                    className="chip"
-                    onClick={() => navigate({ type: 'search', query: item.termo })}
-                  >
-                    {item.musica}
-                  </button>
-                ))}
-              </div>
-            )}
-          </Section>
-        )}
 
         {history.length > 0 && (
           <Section title="Pesquisas recentes" action="Limpar" onAction={clearHistory}>

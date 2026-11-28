@@ -167,8 +167,8 @@ export function Settings({ navigate }: { navigate: Navigate }) {
         <div className="settings-card">
           <Section title="TikTok" note={tiktokAtivo ? 'Ligado' : 'Desligado'}>
             <p className="settings-note">
-              Ligado, a Buscar tem a caixa do link do TikTok e o som do próprio vídeo.
-              Desligado, essa parte fica escondida.
+              Ligado, ao colar um link do TikTok na busca aparece o som do próprio vídeo no
+              topo dos resultados. Desligado, essa parte fica escondida.
             </p>
             <div className="privacy-settings-options">
               <div className="settings-toggle-row">
