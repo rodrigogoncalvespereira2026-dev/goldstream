@@ -5088,8 +5088,8 @@ img {
   inset: -15%;
   background-position: center;
   background-size: cover;
-  filter: blur(46px) saturate(1.35);
-  opacity: 0.95;
+  filter: blur(46px) saturate(1.7);
+  opacity: 1;
   pointer-events: none;
 }
 
@@ -5102,8 +5102,15 @@ img {
   padding: 0;
   overflow: hidden;
   border-radius: 20px 20px 0 0;
-  /* Translúcida: deixa passar a capa desfocada que está por baixo. */
-  background: linear-gradient(180deg, rgba(14, 14, 14, 0.5) 0%, rgba(6, 6, 6, 0.88) 100%);
+  /* Translúcida: deixa passar a cor da capa no topo e fecha-se mais em baixo,
+     onde está a maior parte da letra, para o branco não perder contraste numa
+     capa clara. */
+  background: linear-gradient(
+    180deg,
+    rgba(8, 8, 12, 0.48) 0%,
+    rgba(8, 8, 12, 0.66) 45%,
+    rgba(5, 5, 8, 0.92) 100%
+  );
   box-shadow: 0 -24px 60px rgba(0, 0, 0, 0.5);
 }
 
@@ -5240,7 +5247,7 @@ img {
   line-height: 1.22;
   letter-spacing: -0.025em;
   color: var(--lyrics-color-inactive, rgba(255, 255, 255, 0.5));
-  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.45);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55), 0 2px 14px rgba(0, 0, 0, 0.5);
   transition: color 0.25s ease, filter 0.25s ease, opacity 0.25s ease;
 }
 
@@ -5690,7 +5697,7 @@ img {
 .is-webview .lyrics-glow {
   inset: 0;
   filter: none;
-  opacity: 0.8;
+  opacity: 0.85;
   -webkit-mask-image: radial-gradient(circle at 50% 40%, #000 0%, transparent 78%);
   mask-image: radial-gradient(circle at 50% 40%, #000 0%, transparent 78%);
 }
@@ -5701,6 +5708,17 @@ img {
   filter: none !important;
   text-shadow: none !important;
   transition: color 0.25s ease, opacity 0.25s ease;
+}
+
+/* Sem a sombra do texto (tirada para não pesar no WebView), a legibilidade
+   sobre capas claras vem de um véu mais fechado na folha. */
+.is-webview .lyrics-sheet {
+  background: linear-gradient(
+    180deg,
+    rgba(8, 8, 12, 0.42) 0%,
+    rgba(8, 8, 12, 0.7) 45%,
+    rgba(5, 5, 8, 0.92) 100%
+  );
 }
 
 /* Barras do equalizador: animavam `height`, o que refaz o layout e repinta em
