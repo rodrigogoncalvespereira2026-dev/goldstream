@@ -38,6 +38,7 @@ const DATA_KEYS = [
   'sonora:mine',
   'sonora:ver-video',
   'sonora:np-transparente',
+  'sonora:mostrar-tiktok',
 ]
 
 const CONTA = 'sonora:conta'
@@ -277,6 +278,7 @@ const EVENTOS = [
   'sonora:hidden',
   'sonora:ver-video',
   'sonora:np-transparente',
+  'sonora:mostrar-tiktok',
 ]
 
 if (typeof window !== 'undefined') {

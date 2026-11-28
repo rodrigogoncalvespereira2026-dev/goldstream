@@ -13,6 +13,7 @@ import {
   type AchadoTikTok,
 } from '../lib/tiktok'
 import type { Navigate } from '../lib/nav'
+import { useTikTokAtivo } from '../lib/tiktokOpcao'
 
 type SearchState = {
   status: 'idle' | 'loading' | 'ready' | 'error'
@@ -89,6 +90,7 @@ export function Search({ query, navigate }: { query: string; navigate: Navigate 
     achado?: AchadoTikTok
     erro?: string
   }>({ estado: 'idle' })
+  const [tiktokAtivo] = useTikTokAtivo()
   const [descobertas, guardarDescoberta] = useDescobertasTikTok()
   const [linkTikTokInput, setLinkTikTokInput] = useState('')
 
@@ -171,51 +173,53 @@ export function Search({ query, navigate }: { query: string; navigate: Navigate 
       <div>
         <h1 className="page-title">Buscar</h1>
 
-        <Section
-          title="Músicas do TikTok"
-          note="Cola o link do vídeo e a app encontra a música completa"
-        >
-          <form
-            className="tiktok-form"
-            onSubmit={(event) => {
-              event.preventDefault()
-              const link = parseTikTokLink(linkTikTokInput) ?? linkTikTokInput.trim()
-              if (!link) return
-              navigate({ type: 'search', query: link })
-            }}
+        {tiktokAtivo && (
+          <Section
+            title="Músicas do TikTok"
+            note="Cola o link do vídeo e a app encontra a música completa"
           >
-            <input
-              className="tiktok-input"
-              type="url"
-              inputMode="url"
-              autoCapitalize="off"
-              autoCorrect="off"
-              spellCheck={false}
-              placeholder="https://www.tiktok.com/@…/video/…"
-              aria-label="Link do TikTok"
-              value={linkTikTokInput}
-              onChange={(event) => setLinkTikTokInput(event.target.value)}
-            />
-            <button className="tiktok-button" type="submit" disabled={!linkTikTokInput.trim()}>
-              Procurar
-            </button>
-          </form>
+            <form
+              className="tiktok-form"
+              onSubmit={(event) => {
+                event.preventDefault()
+                const link = parseTikTokLink(linkTikTokInput) ?? linkTikTokInput.trim()
+                if (!link) return
+                navigate({ type: 'search', query: link })
+              }}
+            >
+              <input
+                className="tiktok-input"
+                type="url"
+                inputMode="url"
+                autoCapitalize="off"
+                autoCorrect="off"
+                spellCheck={false}
+                placeholder="https://www.tiktok.com/@…/video/…"
+                aria-label="Link do TikTok"
+                value={linkTikTokInput}
+                onChange={(event) => setLinkTikTokInput(event.target.value)}
+              />
+              <button className="tiktok-button" type="submit" disabled={!linkTikTokInput.trim()}>
+                Procurar
+              </button>
+            </form>
 
-          {descobertas.length > 0 && (
-            <div className="chips tiktok-recentes">
-              {descobertas.map((item) => (
-                <button
-                  key={`${item.termo}-${item.em}`}
-                  type="button"
-                  className="chip"
-                  onClick={() => navigate({ type: 'search', query: item.termo })}
-                >
-                  {item.musica}
-                </button>
-              ))}
-            </div>
-          )}
-        </Section>
+            {descobertas.length > 0 && (
+              <div className="chips tiktok-recentes">
+                {descobertas.map((item) => (
+                  <button
+                    key={`${item.termo}-${item.em}`}
+                    type="button"
+                    className="chip"
+                    onClick={() => navigate({ type: 'search', query: item.termo })}
+                  >
+                    {item.musica}
+                  </button>
+                ))}
+              </div>
+            )}
+          </Section>
+        )}
 
         {history.length > 0 && (
           <Section title="Pesquisas recentes" action="Limpar" onAction={clearHistory}>
@@ -309,7 +313,7 @@ export function Search({ query, navigate }: { query: string; navigate: Navigate 
         )}
       </h1>
 
-      {somTikTok && (
+      {somTikTok && tiktokAtivo && (
         <Section title="Som do TikTok" note="O áudio do próprio vídeo, como está no TikTok">
           <TrackResults tracks={[somTikTok]} showAlbum={false} />
         </Section>

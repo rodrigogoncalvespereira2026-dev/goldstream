@@ -18,6 +18,7 @@ import { signOut, useAccount } from '../lib/account'
 import { ADMIN_EMAIL, isAdmin } from '../lib/admin'
 import { setConsentPreferences, useConsentPreferences } from '../lib/analytics'
 import { useVideoAtivo } from '../lib/videoOpcao'
+import { useTikTokAtivo } from '../lib/tiktokOpcao'
 import { useNpTransparente } from '../lib/npTransparente'
 import type { Navigate } from '../lib/nav'
 
@@ -28,6 +29,7 @@ export function Settings({ navigate }: { navigate: Navigate }) {
   const account = useAccount()
   const consent = useConsentPreferences()
   const [videoAtivo, setVideoAtivo] = useVideoAtivo()
+  const [tiktokAtivo, setTikTokAtivo] = useTikTokAtivo()
   const [fundoTransparente, setFundoTransparente] = useNpTransparente()
   const consentLabel = consent
     ? `Analytics ${consent.analytics ? 'permitido' : 'recusado'} · Retargeting ${consent.retargeting ? 'permitido' : 'recusado'}`
@@ -152,6 +154,37 @@ export function Settings({ navigate }: { navigate: Navigate }) {
                     checked={videoAtivo}
                     onChange={(event) => setVideoAtivo(event.target.checked)}
                     aria-label="Mostrar a opção de ver vídeo"
+                  />
+                  <span className="switch-track" aria-hidden="true">
+                    <span className="switch-knob" />
+                  </span>
+                </label>
+              </div>
+            </div>
+          </Section>
+        </div>
+
+        <div className="settings-card">
+          <Section title="TikTok" note={tiktokAtivo ? 'Ligado' : 'Desligado'}>
+            <p className="settings-note">
+              Ligado, a Buscar tem a caixa do link do TikTok e o som do próprio vídeo.
+              Desligado, essa parte fica escondida.
+            </p>
+            <div className="privacy-settings-options">
+              <div className="settings-toggle-row">
+                <span className="settings-toggle-text">
+                  <strong>Mostrar as músicas do TikTok</strong>
+                  <small>
+                    Cola o link do vídeo e a app procura a música completa; se o som não tiver
+                    nome, toca o áudio do vídeo.
+                  </small>
+                </span>
+                <label className="switch">
+                  <input
+                    type="checkbox"
+                    checked={tiktokAtivo}
+                    onChange={(event) => setTikTokAtivo(event.target.checked)}
+                    aria-label="Mostrar as músicas do TikTok"
                   />
                   <span className="switch-track" aria-hidden="true">
                     <span className="switch-knob" />
