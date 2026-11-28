@@ -34,6 +34,31 @@ const construtor = (): ConstrutorVoz | null => {
 /** Este browser sabe ouvir voz humana? */
 export const vozDisponivel = (): boolean => Boolean(construtor())
 
+/**
+ * Pede a autorização do microfone ao sistema. O reconhecimento de fala costuma
+ * pedi-la sozinho, mas só assim se sabe explicar o que falhou — e é este pedido
+ * que mostra o diálogo de permissão no telemóvel.
+ * Devolve vazio quando a autorização foi dada.
+ */
+async function pedirMicrofone(): Promise<string> {
+  const media = navigator.mediaDevices
+  if (!media?.getUserMedia) return ''
+  try {
+    const fluxo = await media.getUserMedia({ audio: true })
+    fluxo.getTracks().forEach((pista) => pista.stop())
+    return ''
+  } catch (falha) {
+    const nome = falha instanceof DOMException ? falha.name : ''
+    if (nome === 'NotAllowedError' || nome === 'SecurityError') {
+      return 'Autoriza o microfone nas permissões para falar a música'
+    }
+    if (nome === 'NotFoundError' || nome === 'OverconstrainedError') {
+      return 'Não há microfone neste aparelho'
+    }
+    return 'Não consegui abrir o microfone'
+  }
+}
+
 const motivo = (codigo: string): string => {
   if (codigo === 'not-allowed' || codigo === 'service-not-allowed') {
     return 'Sem acesso ao microfone — escreve o nome da música'
@@ -92,7 +117,7 @@ export function useEscuta(aoOuvir: (texto: string) => void) {
     [],
   )
 
-  const alternar = useCallback(() => {
+  const alternar = useCallback(async () => {
     if (reconhecimento.current) {
       parar()
       return
@@ -103,6 +128,14 @@ export function useEscuta(aoOuvir: (texto: string) => void) {
       avisar('Este aparelho não ouve voz')
       return
     }
+
+    // Sem autorização do microfone não vale a pena começar a ouvir.
+    const bloqueio = await pedirMicrofone()
+    if (bloqueio) {
+      avisar(bloqueio)
+      return
+    }
+    if (reconhecimento.current) return
 
     const r = new Construtor()
     r.lang = 'pt-PT'

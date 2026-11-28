@@ -24,9 +24,9 @@
     <!--<uses-permission android:name="android.permission.CAMERA"/>-->
     <!--<uses-feature android:name="android.hardware.camera" android:required="false" />-->
 
-    <!-- Microphone permissions -->
-    <!--<uses-permission android:name="android.permission.RECORD_AUDIO"/>-->
-    <!--<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>-->
+    <!-- Microphone permissions: pesquisa por voz -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 
     <!-- Bluetooth permissions -->
     <!--<uses-permission android:name="android.permission.BLUETOOTH" />-->
