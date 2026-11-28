@@ -1,4 +1,8 @@
 {
+  "8": [
+    "A app passa a pedir autorização do microfone, para a pesquisa por voz.",
+    "Pesquisa por voz: fala o nome da música em vez de escrever."
+  ],
   "6": [
     "A música continua a tocar quando sais da app, com aviso e botões.",
     "O aviso mostra o nome, o artista, a capa e os minutos da faixa.",

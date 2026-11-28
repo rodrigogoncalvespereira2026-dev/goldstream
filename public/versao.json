@@ -1,5 +1,8 @@
 {
-  "versao": "1.0.4",
-  "codigo": 7,
-  "novidades": []
+  "versao": "1.0.5",
+  "codigo": 8,
+  "novidades": [
+    "A app passa a pedir autorização do microfone, para a pesquisa por voz.",
+    "Pesquisa por voz: fala o nome da música em vez de escrever."
+  ]
 }
