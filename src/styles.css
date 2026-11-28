@@ -4408,6 +4408,65 @@ img {
   border-color: var(--accent);
 }
 
+.auth-input-wrap {
+  position: relative;
+  display: block;
+}
+
+.auth-input-wrap input {
+  width: 100%;
+}
+
+/* Espaço para o botão "Ver" sem o texto da palavra-passe passar por baixo. */
+.auth-input-wrap.has-eye input {
+  padding-right: 78px;
+}
+
+.auth-eye {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  padding: 7px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  background: transparent;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.auth-eye:hover,
+.auth-eye[aria-pressed='true'] {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.auth-field-error {
+  font-size: 11px;
+  font-weight: 600;
+  color: #ff8a8a;
+}
+
+.auth-field input[aria-invalid='true'] {
+  border-color: #ff8a8a;
+}
+
+@media (max-width: 760px) {
+  /* No telemóvel o cartão começa em cima: com o teclado aberto, centrado, o
+     botão de submeter desaparecia por baixo. */
+  .auth-screen {
+    place-items: start center;
+    padding: calc(18px + env(safe-area-inset-top, 0px)) 14px
+      calc(18px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .auth-card {
+    padding: 22px 18px;
+    border-radius: 16px;
+  }
+}
+
 .auth-error {
   font-size: 13px;
   color: #ff8a8a;

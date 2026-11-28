@@ -1,6 +1,10 @@
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import { signIn, signUp } from '../lib/account'
 import { LogoMark } from '../components/Icons'
+
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+type Erros = { nome?: string; email?: string; senha?: string }
 
 export function Auth() {
   const [mode, setMode] = useState<'in' | 'up'>('up')
@@ -8,16 +12,46 @@ export function Auth() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [erros, setErros] = useState<Erros>({})
+  const [mostrarSenha, setMostrarSenha] = useState(false)
   const [busy, setBusy] = useState(false)
+  const nomeRef = useRef<HTMLInputElement | null>(null)
+  const emailRef = useRef<HTMLInputElement | null>(null)
+  const senhaRef = useRef<HTMLInputElement | null>(null)
+
+  /** Mensagens em português junto do campo, em vez do aviso do navegador. */
+  const validar = (): Erros => {
+    const novos: Erros = {}
+    if (mode === 'up' && !name.trim()) novos.nome = 'Diz como queres ser chamado.'
+    const emailLimpo = email.trim()
+    if (!emailLimpo) novos.email = 'Falta o email.'
+    else if (!EMAIL.test(emailLimpo)) novos.email = 'Este email não parece válido.'
+    if (!password) novos.senha = 'Falta a palavra-passe.'
+    else if (mode === 'up' && password.length < 6) {
+      novos.senha = 'A palavra-passe precisa de 6 caracteres, no mínimo.'
+    }
+    return novos
+  }
+
+  const limparErro = (campo: keyof Erros) => {
+    setErros((atual) => (atual[campo] ? { ...atual, [campo]: undefined } : atual))
+  }
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
     if (busy) return
-    setBusy(true)
+    const novos = validar()
+    setErros(novos)
     setError('')
+    if (novos.nome || novos.email || novos.senha) {
+      const primeiro = novos.nome ? nomeRef : novos.email ? emailRef : senhaRef
+      primeiro.current?.focus()
+      return
+    }
+    setBusy(true)
     try {
-      if (mode === 'up') await signUp({ name, email, password })
-      else await signIn({ email, password })
+      if (mode === 'up') await signUp({ name: name.trim(), email: email.trim(), password })
+      else await signIn({ email: email.trim(), password })
       // A app reabre já com os dados desta conta.
       window.location.reload()
     } catch (problem) {
@@ -33,7 +67,8 @@ export function Auth() {
         <span className="auth-blob b" />
       </div>
 
-      <form className="auth-card" onSubmit={submit}>
+      {/* noValidate: os avisos são os nossos, em português e junto do campo. */}
+      <form className="auth-card" onSubmit={submit} noValidate>
         <div className="auth-brand">
           <LogoMark size={34} />
           <span>goldenstream</span>
@@ -51,41 +86,95 @@ export function Auth() {
         {mode === 'up' && (
           <label className="auth-field">
             <span>Nome</span>
-            <input
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder="Como queres ser chamado"
-              autoComplete="name"
-              maxLength={40}
-              required
-            />
+            <span className="auth-input-wrap">
+              <input
+                ref={nomeRef}
+                value={name}
+                onChange={(event) => {
+                  setName(event.target.value)
+                  limparErro('nome')
+                }}
+                placeholder="Como queres ser chamado"
+                autoComplete="name"
+                autoCapitalize="words"
+                enterKeyHint="next"
+                maxLength={40}
+                aria-invalid={Boolean(erros.nome)}
+                aria-describedby={erros.nome ? 'erro-nome' : undefined}
+              />
+            </span>
+            {erros.nome && (
+              <small className="auth-field-error" id="erro-nome">
+                {erros.nome}
+              </small>
+            )}
           </label>
         )}
 
         <label className="auth-field">
           <span>Email</span>
-          <input
-            type="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="tu@exemplo.com"
-            autoComplete="email"
-            inputMode="email"
-            required
-          />
+          <span className="auth-input-wrap">
+            <input
+              ref={emailRef}
+              type="email"
+              value={email}
+              onChange={(event) => {
+                setEmail(event.target.value)
+                limparErro('email')
+              }}
+              placeholder="tu@exemplo.com"
+              autoComplete="email"
+              inputMode="email"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              enterKeyHint="next"
+              aria-invalid={Boolean(erros.email)}
+              aria-describedby={erros.email ? 'erro-email' : undefined}
+            />
+          </span>
+          {erros.email && (
+            <small className="auth-field-error" id="erro-email">
+              {erros.email}
+            </small>
+          )}
         </label>
 
         <label className="auth-field">
           <span>Palavra-passe</span>
-          <input
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            placeholder={mode === 'up' ? 'Pelo menos 6 caracteres' : 'A tua palavra-passe'}
-            autoComplete={mode === 'up' ? 'new-password' : 'current-password'}
-            minLength={6}
-            required
-          />
+          <span className="auth-input-wrap has-eye">
+            <input
+              ref={senhaRef}
+              type={mostrarSenha ? 'text' : 'password'}
+              value={password}
+              onChange={(event) => {
+                setPassword(event.target.value)
+                limparErro('senha')
+              }}
+              placeholder={mode === 'up' ? 'Pelo menos 6 caracteres' : 'A tua palavra-passe'}
+              autoComplete={mode === 'up' ? 'new-password' : 'current-password'}
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              enterKeyHint="done"
+              aria-invalid={Boolean(erros.senha)}
+              aria-describedby={erros.senha ? 'erro-senha' : undefined}
+            />
+            <button
+              type="button"
+              className="auth-eye"
+              onClick={() => setMostrarSenha((atual) => !atual)}
+              aria-pressed={mostrarSenha}
+              aria-label={mostrarSenha ? 'Esconder a palavra-passe' : 'Mostrar a palavra-passe'}
+            >
+              {mostrarSenha ? 'Ocultar' : 'Ver'}
+            </button>
+          </span>
+          {erros.senha && (
+            <small className="auth-field-error" id="erro-senha">
+              {erros.senha}
+            </small>
+          )}
         </label>
 
         {error && (
@@ -94,8 +183,19 @@ export function Auth() {
           </p>
         )}
 
-        <button type="submit" className="auth-submit" disabled={busy}>
-          {busy ? 'A entrar…' : mode === 'up' ? 'Criar conta' : 'Entrar'}
+        <button
+          type="submit"
+          className="auth-submit"
+          disabled={busy}
+          aria-busy={busy}
+        >
+          {busy
+            ? mode === 'up'
+              ? 'A criar conta…'
+              : 'A entrar…'
+            : mode === 'up'
+              ? 'Criar conta'
+              : 'Entrar'}
         </button>
 
         <button
@@ -104,6 +204,8 @@ export function Auth() {
           onClick={() => {
             setMode(mode === 'up' ? 'in' : 'up')
             setError('')
+            setErros({})
+            setMostrarSenha(false)
           }}
         >
           {mode === 'up' ? 'Já tenho conta — entrar' : 'Ainda não tenho conta — criar agora'}
