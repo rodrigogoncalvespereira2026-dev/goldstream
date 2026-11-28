@@ -67,15 +67,18 @@ function TrackResults({
 export function Search({ query, navigate }: { query: string; navigate: Navigate }) {
   const { current, isPlaying, playQueue, recent } = usePlayer()
   const [history, rememberSearch, clearHistory] = useSearchHistory()
+  const [tiktokAtivo] = useTikTokAtivo()
 
   const suggestions = useMemo(() => {
     const artists: string[] = []
     recent.forEach((id) => {
       const track = getTrack(id)
-      if (track && !artists.includes(track.artist)) artists.push(track.artist)
+      // Com a opção do TikTok desligada, o som do vídeo também sai das sugestões.
+      if (!track || (!tiktokAtivo && track.albumId === 'tiktok')) return
+      if (!artists.includes(track.artist)) artists.push(track.artist)
     })
     return artists.slice(0, 8)
-  }, [recent])
+  }, [recent, tiktokAtivo])
   const youTubeKey = YOUTUBE_API_KEY
   const trimmed = query.trim()
   const local = useMemo(() => searchCatalog(query), [query])
@@ -90,7 +93,6 @@ export function Search({ query, navigate }: { query: string; navigate: Navigate 
     achado?: AchadoTikTok
     erro?: string
   }>({ estado: 'idle' })
-  const [tiktokAtivo] = useTikTokAtivo()
   const [descobertas, guardarDescoberta] = useDescobertasTikTok()
   const [linkTikTokInput, setLinkTikTokInput] = useState('')
 
