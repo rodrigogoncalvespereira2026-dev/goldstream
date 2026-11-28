@@ -5695,6 +5695,7 @@ img {
    pesava: aqui as linhas ficam nítidas e só a opacidade as distingue. */
 .is-webview .lyrics-line {
   filter: none !important;
+  text-shadow: none !important;
   transition: color 0.25s ease, opacity 0.25s ease;
 }
 
