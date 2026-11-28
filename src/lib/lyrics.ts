@@ -1,4 +1,11 @@
 import type { Track } from './catalog'
+import {
+  chaveDaFaixa,
+  guardarLetraLocal,
+  guardarLetraNaConta,
+  lerLetraLocal,
+  letrasDaConta,
+} from './letras'
 
 /**
  * Letras vêm do LRCLIB, uma base aberta e sem chave de API (e com CORS aberto).
@@ -91,19 +98,53 @@ export const getActiveLyricIndex = (lines: SyncedLine[], currentTime: number): n
   return active
 }
 
+/** Guarda a letra nos dois sítios: memória, este aparelho e a conta. */
+const guardar = (chave: string, valor: LyricsResult | null): void => {
+  cache.set(chave, valor)
+  guardarLetraLocal(chave, valor)
+  // Para a conta vai em segundo plano: abrir a letra não espera pela gravação.
+  void guardarLetraNaConta(chave, valor)
+}
+
 export async function fetchLyrics(track: Track, signal?: AbortSignal): Promise<LyricsResult | null> {
-  const key = `${track.title}|${track.artist}`
+  const key = chaveDaFaixa(track.title, track.artist)
   if (cache.has(key)) return cache.get(key) ?? null
 
+  // 1. Já está neste aparelho? Abre logo, mesmo sem rede.
+  const local = lerLetraLocal(key)
+  if (local.encontrada) {
+    cache.set(key, local.valor)
+    return local.valor
+  }
+
+  // 2. Já foi guardada na conta (outro telemóvel, ou este depois de limpo)?
+  try {
+    const daConta = await letrasDaConta([key])
+    if (Object.prototype.hasOwnProperty.call(daConta, key)) {
+      const valor = daConta[key] ?? null
+      cache.set(key, valor)
+      guardarLetraLocal(key, valor)
+      return valor
+    }
+  } catch {
+    /* sem sessão ou sem rede: segue para o LRCLIB */
+  }
+
+  // 3. LRCLIB.
   const queries = [
     `track_name=${encodeURIComponent(track.title)}&artist_name=${encodeURIComponent(track.artist)}`,
     `q=${encodeURIComponent(`${track.title} ${track.artist}`)}`,
     `q=${encodeURIComponent(track.title)}`,
   ]
 
+  // Distingue "o LRCLIB respondeu que não há" de "a rede falhou": o segundo
+  // caso não pode ficar guardado como faixa sem letra.
+  let respondeu = false
+
   for (const query of queries) {
     try {
       const response = await fetch(`https://lrclib.net/api/search?${query}`, { signal })
+      respondeu = true
       if (!response.ok) continue
       const entries = (await response.json()) as LrclibEntry[]
       if (!Array.isArray(entries) || !entries.length) continue
@@ -112,13 +153,18 @@ export async function fetchLyrics(track: Track, signal?: AbortSignal): Promise<L
       const plain = (best.plainLyrics ?? '').trim()
       if (!plain) continue
       const result: LyricsResult = { plain, sync: best.syncedLyrics?.trim() || undefined }
-      cache.set(key, result)
+      guardar(key, result)
       return result
     } catch (error) {
       if (signal?.aborted) throw error
     }
   }
 
-  cache.set(key, null)
+  if (signal?.aborted) throw new Error('Pedido de letra cancelado.')
+  if (!respondeu) return null
+
+  // O LRCLIB respondeu e não encontrou: guarda-se a falta para não voltar a
+  // procurar esta faixa em cada abertura.
+  guardar(key, null)
   return null
 }

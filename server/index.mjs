@@ -27,11 +27,18 @@ await cliente.connect()
 const db = cliente.db('goldenstream')
 const contas = db.collection('contas')
 const sessoes = db.collection('sessoes')
+/** Letras do LRCLIB guardadas por conta: abrem logo e sem rede. */
+const letras = db.collection('letras')
+
+/** Teto por conta: uma letra ocupa poucos KB, mas a coleção não pode crescer sem fim. */
+const LIMITE_LETRAS = 2000
 
 await Promise.all([
   contas.createIndex({ email: 1 }, { unique: true }),
   sessoes.createIndex({ token: 1 }, { unique: true }),
   sessoes.createIndex({ expiraEm: 1 }, { expireAfterSeconds: 0 }),
+  letras.createIndex({ conta: 1, chave: 1 }, { unique: true }),
+  letras.createIndex({ conta: 1, atualizadoEm: 1 }),
 ])
 console.log('MongoDB ligado')
 
@@ -152,6 +159,21 @@ const resumirDados = (dados) => {
     reproducoes: Number(stats?.plays) || 0,
     segundos: Number(stats?.seconds) || 0,
   }
+}
+
+/**
+ * Letra guardável: `null` para "procurou-se e não há", ou o texto simples com a
+ * versão sincronizada opcional. Tudo o resto é recusado.
+ */
+const normalizarLetra = (valor) => {
+  if (valor === null) return null
+  if (!valor || typeof valor !== 'object' || Array.isArray(valor)) return null
+  const plain = typeof valor.plain === 'string' ? valor.plain.slice(0, 40000) : ''
+  if (!plain.trim()) return null
+  const sync = typeof valor.sync === 'string' && valor.sync.trim()
+    ? valor.sync.slice(0, 40000)
+    : undefined
+  return sync ? { plain, sync } : { plain }
 }
 
 const normalizarDados = (valor) => {
@@ -277,6 +299,65 @@ const servidor = createServer(async (req, res) => {
         { _id: autenticada.conta._id },
         { $set: { dados, atualizadoEm: new Date() } },
       )
+      responder(res, 200, { ok: true })
+      return
+    }
+
+    // Letras guardadas na conta: a app pergunta antes de ir ao LRCLIB.
+    if (req.method === 'POST' && rota === '/api/letras/consultar') {
+      const autenticada = await contaAutenticada(req)
+      if (!autenticada) throw new Erro(401, 'Sessão inválida.')
+      const corpo = await lerCorpo(req)
+      const pedidas = Array.isArray(corpo.chaves) ? corpo.chaves : []
+      const chaves = pedidas
+        .filter((item) => typeof item === 'string' && item.length > 0 && item.length <= 200)
+        .slice(0, 20)
+      if (!chaves.length) {
+        responder(res, 200, { letras: {} })
+        return
+      }
+      const encontradas = await letras
+        .find({ conta: autenticada.conta._id, chave: { $in: chaves } })
+        .project({ chave: 1, valor: 1 })
+        .toArray()
+      const saida = {}
+      encontradas.forEach((item) => {
+        // `null` também conta: é "já se procurou e não há letra".
+        saida[item.chave] = item.valor ?? null
+      })
+      responder(res, 200, { letras: saida })
+      return
+    }
+
+    if (req.method === 'PUT' && rota === '/api/letras') {
+      const autenticada = await contaAutenticada(req)
+      if (!autenticada) throw new Erro(401, 'Sessão inválida.')
+      const corpo = await lerCorpo(req)
+      const chave = typeof corpo.chave === 'string' ? corpo.chave.trim() : ''
+      if (!chave || chave.length > 200) throw new Erro(400, 'Faixa inválida.')
+      // Sem o campo, não se sabe se é letra vazia ou pedido estragado: recusar
+      // evita gravar um "não há letra" falso e nunca mais voltar a procurar.
+      if (!Object.prototype.hasOwnProperty.call(corpo, 'valor')) {
+        throw new Erro(400, 'Falta a letra.')
+      }
+      const valor = normalizarLetra(corpo.valor)
+      if (corpo.valor !== null && valor === null) throw new Erro(400, 'Letra inválida.')
+      const conta = autenticada.conta._id
+      await letras.updateOne(
+        { conta, chave },
+        { $set: { conta, chave, valor, atualizadoEm: new Date() } },
+        { upsert: true },
+      )
+      const total = await letras.countDocuments({ conta })
+      if (total > LIMITE_LETRAS) {
+        const antigas = await letras
+          .find({ conta })
+          .sort({ atualizadoEm: 1 })
+          .limit(total - LIMITE_LETRAS)
+          .project({ _id: 1 })
+          .toArray()
+        await letras.deleteMany({ _id: { $in: antigas.map((item) => item._id) } })
+      }
       responder(res, 200, { ok: true })
       return
     }
