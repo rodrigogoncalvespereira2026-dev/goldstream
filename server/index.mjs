@@ -168,6 +168,47 @@ const somDaPagina = (html) => {
   return null
 }
 
+/**
+ * Endereço do MP3 do som do vídeo. O TikTok assina estes links e eles caducam
+ * em horas, por isso guarda-se o endereço só alguns minutos.
+ */
+const AUDIO_CACHE = new Map()
+const audioDoVideo = async (endereco) => {
+  const guardado = AUDIO_CACHE.get(endereco)
+  if (guardado && guardado.expiraEm > Date.now()) return guardado.url
+
+  const resposta = await comPrazo(
+    endereco,
+    {
+      redirect: 'follow',
+      headers: {
+        'user-agent': AGENTE_NAVEGADOR,
+        'accept-language': 'pt-PT,pt;q=0.9,en;q=0.8',
+        accept: 'text/html,application/xhtml+xml',
+      },
+    },
+    9000,
+  )
+  if (!resposta.ok) return null
+
+  const html = (await resposta.text()).slice(0, 500000)
+  const achado = /"playUrl":"((?:[^"\\]|\\.)*)"/.exec(html)
+  if (!achado) return null
+
+  let mp3 = null
+  try {
+    mp3 = JSON.parse(`"${achado[1]}"`)
+  } catch {
+    return null
+  }
+  // Só o CDN do TikTok: a página não pode transformar a rota num proxy aberto.
+  if (typeof mp3 !== 'string' || !/^https:\/\/[\w.-]*tiktokcdn[\w.-]*\//i.test(mp3)) return null
+
+  if (AUDIO_CACHE.size > 60) AUDIO_CACHE.clear()
+  AUDIO_CACHE.set(endereco, { url: mp3, expiraEm: Date.now() + 10 * 60_000 })
+  return mp3
+}
+
 /** Página /music/<nome-do-som>-<id>: o nome está no próprio endereço. */
 const somDoEndereco = (url) => {
   const partes = url.pathname.split('/').filter(Boolean)
@@ -522,6 +563,43 @@ const servidor = createServer(async (req, res) => {
         legenda: legenda ? legenda.slice(0, 200) : null,
         link: final.href,
       })
+      return
+    }
+
+    // O som do próprio vídeo: é o que sobra quando o TikTok diz "original sound".
+    if (req.method === 'GET' && rota === '/api/tiktok/audio') {
+      const pedido = linkTikTok(url.searchParams.get('url'))
+      if (!pedido) throw new Erro(400, 'Isso não parece um link do TikTok.')
+
+      const mp3 = await audioDoVideo(pedido.href)
+      if (!mp3) throw new Erro(422, 'Não consegui abrir o som desse vídeo.')
+
+      const som = await comPrazo(
+        mp3,
+        { headers: { 'user-agent': AGENTE_NAVEGADOR, referer: 'https://www.tiktok.com/' } },
+        12000,
+      )
+      if (!som.ok || !som.body) throw new Erro(502, 'O TikTok não devolveu o som do vídeo.')
+
+      const tamanho = Number(som.headers.get('content-length') || 0)
+      res.writeHead(200, {
+        'Content-Type': som.headers.get('content-type') || 'audio/mpeg',
+        ...(tamanho > 0 ? { 'Content-Length': tamanho } : {}),
+        'Cache-Control': 'public, max-age=3600',
+        'Access-Control-Allow-Origin': '*',
+      })
+
+      const leitor = som.body.getReader()
+      try {
+        for (;;) {
+          const { done, value } = await leitor.read()
+          if (done) break
+          res.write(Buffer.from(value))
+        }
+      } catch {
+        /* o cliente desligou a meio do som */
+      }
+      res.end()
       return
     }
 

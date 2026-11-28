@@ -8,6 +8,7 @@ import { useSearchHistory } from '../lib/searchHistory'
 import {
   parseTikTokLink,
   resolverTikTok,
+  trackDoSom,
   useDescobertasTikTok,
   type AchadoTikTok,
 } from '../lib/tiktok'
@@ -159,6 +160,12 @@ export function Search({ query, navigate }: { query: string; navigate: Navigate 
     }
   }, [busca, attempt])
 
+  // O som do vídeo toca sempre: é a única forma de ouvir o que não tem nome.
+  const somTikTok = useMemo(
+    () => (linkTikTok && tiktok.achado ? trackDoSom(tiktok.achado, linkTikTok) : null),
+    [linkTikTok, tiktok.achado],
+  )
+
   if (!trimmed) {
     return (
       <div>
@@ -301,6 +308,12 @@ export function Search({ query, navigate }: { query: string; navigate: Navigate 
           </>
         )}
       </h1>
+
+      {somTikTok && (
+        <Section title="Som do TikTok" note="O áudio do próprio vídeo, como está no TikTok">
+          <TrackResults tracks={[somTikTok]} showAlbum={false} />
+        </Section>
+      )}
 
       <Section
         title="YouTube · músicas completas"
